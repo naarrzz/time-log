@@ -217,15 +217,15 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
     <p class="empty" id="sheet-sub"></p>
     <div class="tiles" id="sheet-tiles"></div>
     <div class="chips">
-      <button class="btn" id="sheet-delete">Burahin</button>
-      <button class="btn primary" id="sheet-close">Tapos</button>
+      <button class="btn" id="sheet-delete">Delete</button>
+      <button class="btn primary" id="sheet-close">Done</button>
     </div>
   </div>
 </div>
 
 <nav class="tabs"><div class="in">
   <button id="tab-now" class="on">Ngayon</button>
-  <button id="tab-gaps">Punan<span class="badge" id="gap-badge" hidden></span></button>
+  <button id="tab-gaps">Gaps<span class="badge" id="gap-badge" hidden></span></button>
   <button id="tab-week">Linggo</button>
 </div></nav>
 
@@ -535,7 +535,7 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
   function openSheet(key, id) {
     const x = (days[key] || []).find(s => s.id === id); if (!x) return;
     editing = { key, id };
-    $("sheet-sub").textContent = fmtTime(x.start) + " – " + fmtTime(x.end) + " · " + fmtDur(x.end - x.start) + ". Palitan ang kategorya:";
+    $("sheet-sub").textContent = fmtTime(x.start) + " – " + fmtTime(x.end) + " · " + fmtDur(x.end - x.start) + ". Palitan ang category:";
     const st = $("sheet-tiles"); st.innerHTML = "";
     CATS.forEach(c => st.appendChild(tileButton(c, () => { x.cat = c.id; saveDay(key); closeSheet(); render(); }, x.cat === c.id)));
     $("sheet-wrap").classList.add("show");
