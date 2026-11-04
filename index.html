@@ -809,7 +809,7 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
     b.className = "tile" + (isOn ? " on" : "");
     b.style.setProperty("--c", cat.c);
     const dot = document.createElement("span"); dot.className = "dot"; dot.style.background = cat.c;
-    const t = document.createElement("span"); t.className = "t"; t.textContent = cat.name;
+    const t = document.createElement("span"); t.className = "t"; t.textContent = cat.name.replace(/\//g, "/\u200B");   // wrap at the slash, not mid-word
     b.append(dot, t);
     b.setAttribute("aria-pressed", isOn ? "true" : "false");
     b.addEventListener("click", onClick);
