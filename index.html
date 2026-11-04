@@ -55,7 +55,8 @@ header.top .date { color: var(--ink-soft); font-size: 13px; }
   background: var(--surface); border: 1px solid var(--line); border-radius: 18px;
   padding: 16px 18px; display: flex; align-items: center; gap: 14px; min-height: 84px;
 }
-.live .swatch { width: 14px; align-self: stretch; border-radius: 7px; background: var(--line); flex: none; }
+.live .swatch { width: 14px; align-self: stretch; border-radius: 7px; background: var(--line); flex: none; transition: background-color .25s ease; }
+.swap { animation: lift-in .22s ease-out; }
 .live .what { flex: 1; min-width: 0; }
 .live .label { font-size: 13px; color: var(--ink-soft); margin: 0 0 2px; }
 .live .cat { font-family: var(--display); font-size: 24px; font-weight: 700; margin: 0; text-wrap: balance; }
@@ -69,17 +70,21 @@ header.top .date { color: var(--ink-soft); font-size: 13px; }
   appearance: none; border: 1px solid var(--line); background: var(--surface); color: var(--ink);
   border-radius: 14px; padding: 14px 10px 12px; min-height: 76px; text-align: left; cursor: pointer;
   display: flex; flex-direction: column; justify-content: space-between; gap: 8px;
-  font: 600 13.5px/1.2 var(--body); position: relative; transition: transform .08s ease;
+  font: 600 13.5px/1.2 var(--body); position: relative; overflow: hidden; transition: transform .1s ease, border-color .2s ease;
 }
-.tile:active { transform: scale(.97); }
-.tile .dot { width: 12px; height: 12px; border-radius: 50%; }
-.tile .t { overflow-wrap: break-word; hyphens: none; }
+.tile:active { transform: scale(.96); }
+.tile .dot { width: 12px; height: 12px; border-radius: 50%; position: relative; z-index: 1; }
+.tile .t { overflow-wrap: break-word; hyphens: none; position: relative; z-index: 1; }
 .tile.on { border-color: var(--c); box-shadow: inset 0 0 0 2px var(--c); }
+.tile.on::after { content: ""; position: absolute; inset: 0; border-radius: inherit; box-shadow: inset 0 0 16px var(--c); pointer-events: none; animation: breathe 2.8s ease-in-out infinite; }
+.ripple { position: absolute; border-radius: 50%; background: var(--c); opacity: .28; transform: scale(0); pointer-events: none; animation: ripple .45s ease-out forwards; }
 .tile:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 
 /* Buttons */
 .btn { appearance: none; border: 1px solid var(--line); background: var(--surface); color: var(--ink);
   border-radius: 999px; padding: 8px 14px; font: 600 13px var(--body); cursor: pointer; }
+.btn { transition: transform .1s ease; }
+.btn:active { transform: scale(.96); }
 .btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 .chips { display: flex; flex-wrap: wrap; gap: 8px; }
 
@@ -135,6 +140,8 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
 .tagrow { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .tagrow .lbl { font-size: 12px; color: var(--ink-soft); margin-right: 2px; }
 .btn.tag[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.btn.tag[aria-pressed="true"]::before { content: ""; display: inline-block; width: 7px; height: 7px; margin-right: 6px; border-radius: 50%; background: currentColor; vertical-align: 1px; animation: pulse 1.6s ease-in-out infinite; }
+.btn.tag.pop { animation: pop .22s ease-out; }
 .sub-h { font-size: 12px; color: var(--ink-soft); margin: 14px 0 0; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
 /* Login */
 .login { max-width: 400px; margin: 0 auto; padding: calc(56px + env(safe-area-inset-top)) 16px 32px; display: flex; flex-direction: column; gap: 16px; }
@@ -172,8 +179,29 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
 .cat-row input[type="text"] { font: 16px var(--body); color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; min-width: 0; width: 100%; }
 .cat-row .btn { padding: 8px 10px; min-height: 40px; }
 #cats-list { display: flex; flex-direction: column; gap: 8px; }
+/* Motion. These restart on their own whenever the element goes from hidden to shown, so opening a tab,
+   a sheet or a toast plays them once, and a re-render of what's inside doesn't. */
+@keyframes breathe { 0%, 100% { opacity: .25; } 50% { opacity: .85; } }
+@keyframes ripple { to { transform: scale(1); opacity: 0; } }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+@keyframes pop { 0% { transform: scale(.8); } 60% { transform: scale(1.05); } 100% { transform: scale(1); } }
+@keyframes lift-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes reveal { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
+@keyframes slide-up { from { transform: translateY(100%); } to { transform: none; } }
+@keyframes toast-in { from { opacity: 0; transform: translate(-50%, 10px); } to { opacity: 1; transform: translate(-50%, 0); } }
+.view { animation: fade-in .16s ease-out; }
+#today-bar, #week-days { animation: reveal .45s ease-out; }
+.toast.show { animation: toast-in .2s ease-out; }
+.sheet-wrap.show { animation: fade-in .16s ease-out; }
+.sheet-wrap.show .sheet { animation: slide-up .24s cubic-bezier(.2, .8, .3, 1); }
+.kas-edit { animation: lift-in .18s ease-out; }
+.login { animation: fade-in .2s ease-out; }
 [hidden] { display: none !important; }
-@media (prefers-reduced-motion: reduce) { .tile { transition: none; } }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+  .ripple { display: none; }
+}
 </style>
 </head>
 <body>
@@ -384,7 +412,7 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
   const days = {};               // key -> sessions[]
   const kasDays = {};            // key -> finished Kasabay [{ id, c, cat, start, end }]
   let lastClosed = null;         // { key, id } of the session closed by the latest switch
-  let toastTap = 0, toastTimer = null, kasTap = 0, showAllKas = false;
+  let toastTap = 0, toastTimer = null, kasTap = 0, showAllKas = false, kasPop = null, liveShown = null, liveChipSig = "";
   let gapDay = "today", skipped = new Set();
   let editing = null;            // { key, id }
 
@@ -597,7 +625,7 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
       return;
     }
     current.kas = (current.kas || []).concat([{ cat, start: now }]);
-    kasTap = now;
+    kasTap = now; kasPop = cat;
     saveCurrent(); render();
     showToast(CAT[current.cat].name + " + " + CAT[cat].name + "? Multitasker ka ah. Kanina pa ba 'yan?", [15, 30, 60], m => backdateKas(cat, m), now);
   }
@@ -655,7 +683,7 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
     cats.forEach(id => {
       const on = isOn(id);
       const b = document.createElement("button");
-      b.className = "btn tag"; b.textContent = labelOf ? labelOf(id) : CAT[id].name;
+      b.className = "btn tag"; b.dataset.id = id; b.textContent = labelOf ? labelOf(id) : CAT[id].name;
       b.setAttribute("aria-pressed", on ? "true" : "false");
       b.addEventListener("click", () => onToggle(id, !on));
       el.appendChild(b);
@@ -680,7 +708,7 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
     input.type = "time"; input.className = "toast-time"; input.setAttribute("aria-label", "Oras ng simula");
     const t0 = new Date(shown); input.value = pad(t0.getHours()) + ":" + pad(t0.getMinutes());
     const ok = document.createElement("button"); ok.className = "btn"; ok.textContent = "Goods";
-    const no = document.createElement("button"); no.className = "btn"; no.textContent = "Wag na";
+    const no = document.createElement("button"); no.className = "btn"; no.textContent = "Nvm";
     no.addEventListener("click", hideToast);
     ok.addEventListener("click", () => {
       const [h, m] = input.value.split(":").map(Number);
@@ -781,11 +809,26 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
     b.className = "tile" + (isOn ? " on" : "");
     b.style.setProperty("--c", cat.c);
     const dot = document.createElement("span"); dot.className = "dot"; dot.style.background = cat.c;
-    const t = document.createElement("span"); t.className = "t"; t.textContent = cat.name;
+    const t = document.createElement("span"); t.className = "t"; t.textContent = cat.name.replace(/\//g, "/\u200B");   // wrap at the slash, not mid-word
     b.append(dot, t);
     b.setAttribute("aria-pressed", isOn ? "true" : "false");
     b.addEventListener("click", onClick);
     return b;
+  }
+  // Render runs every minute and on every sync. Tiles are only rebuilt when the tiles themselves change.
+  let tilesSig = "";
+  function drawTiles() {
+    const el = $("tiles"), cats = shownCats(), sig = cats.map(c => [c.id, c.name, c.c].join(":")).join("|");
+    if (sig !== tilesSig) {
+      el.innerHTML = "";
+      cats.forEach(c => { const b = tileButton(c, () => switchTo(c.id), false); b.dataset.id = c.id; el.appendChild(b); });
+      tilesSig = sig;
+    }
+    el.querySelectorAll(".tile").forEach(b => {
+      const on = !!current && current.cat === b.dataset.id;
+      b.classList.toggle("on", on);
+      b.setAttribute("aria-pressed", on ? "true" : "false");
+    });
   }
   function renderBar(el, list, d0) {
     el.innerHTML = "";
@@ -837,10 +880,24 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
       const others = shownCats().map(x => x.id).filter(id => id !== current.cat);
       const onNow = id => running.some(k => k.cat === id);
       const cats = showAllKas ? others : others.filter(id => KAS_QUICK.includes(id) || onNow(id));
-      kasButtons($("live-tags"), cats, onNow, id => toggleKas(id), id => {
+      const chipLabel = id => {
         const k = running.find(x => x.cat === id);
         return CAT[id].name + (k ? " · " + fmtDur(kasEnd(k, now) - k.start) : "");
-      }, { text: showAllKas ? "Mas kaunti" : "Iba pa", onClick: () => { showAllKas = !showAllKas; render(); } });
+      };
+      // Same chips as last time: just refresh the labels. A rebuild right after a tap, which every save
+      // triggers through its sync, would cut off the pop and restart the pulse.
+      const chipSig = [cats.join(), running.map(k => k.cat).join(), showAllKas].join("|");
+      if (chipSig !== liveChipSig) {
+        kasButtons($("live-tags"), cats, onNow, id => toggleKas(id), chipLabel, { text: showAllKas ? "Mas kaunti" : "Iba pa", onClick: () => { showAllKas = !showAllKas; render(); } });
+        liveChipSig = chipSig;
+      } else {
+        $("live-tags").querySelectorAll("[data-id]").forEach(b => { b.textContent = chipLabel(b.dataset.id); });
+      }
+      if (kasPop) {
+        const fresh = $("live-tags").querySelector('[data-id="' + kasPop + '"]');
+        if (fresh) playOnce(fresh, "pop");
+        kasPop = null;
+      }
     } else {
       $("live-tags").hidden = true;
       $("live-swatch").style.background = "var(--line)";
@@ -851,9 +908,17 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
       $("live-edit").hidden = true;
     }
 
+    // live card text eases in only when the activity actually changes
+    const showing = current && CAT[current.cat] ? current.cat : "";
+    if (showing !== liveShown) {
+      if (liveShown !== null) ["live-cat", "live-label", "live-timer"].forEach(id => {
+        playOnce($(id), "swap");
+      });
+      liveShown = showing;
+    }
+
     // tiles
-    const tiles = $("tiles"); tiles.innerHTML = "";
-    shownCats().forEach(c => tiles.appendChild(tileButton(c, () => switchTo(c.id), current && current.cat === c.id)));
+    drawTiles();
 
     // today
     const list = sessionsFor(today, true);
@@ -973,6 +1038,28 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
     }
   }
 
+  // Play a CSS animation once. The class comes off after, or reopening the tab would play it again.
+  function playOnce(el, cls) {
+    el.classList.remove(cls);
+    void el.offsetWidth;   // forces a restart if it was already running
+    el.classList.add(cls);
+    el.addEventListener("animationend", () => el.classList.remove(cls), { once: true });
+  }
+
+  // ---------- tile ripple ----------
+  document.addEventListener("pointerdown", e => {
+    const tile = e.target.closest && e.target.closest(".tile");
+    if (!tile) return;
+    const box = tile.getBoundingClientRect(), size = Math.max(box.width, box.height) * 2;
+    const dot = document.createElement("span");
+    dot.className = "ripple";
+    dot.style.width = dot.style.height = size + "px";
+    dot.style.left = (e.clientX - box.left - size / 2) + "px";
+    dot.style.top = (e.clientY - box.top - size / 2) + "px";
+    tile.appendChild(dot);
+    setTimeout(() => dot.remove(), 600);
+  });
+
   // ---------- edit sheet ----------
   function openSheet(key, id) {
     // Look the log up on every action: each save triggers a snapshot that replaces the objects in days.
@@ -1035,7 +1122,7 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
     list.forEach(k => el.appendChild(kasRow(k, key, r)));
     const tags = $("sheet-tags");
     tags.hidden = !kasAdding;
-    $("sheet-kas-add").textContent = kasAdding ? "Wag na" : "+ Add Kasabay";
+    $("sheet-kas-add").textContent = kasAdding ? "Nvm" : "+ Add Kasabay";
     if (kasAdding) kasButtons(tags, shownCats().map(c => c.id).filter(c => c !== r.cat), () => false, id => addKasToLog(id));
   }
   function kasRow(k, key, r) {
