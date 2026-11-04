@@ -1,6 +1,6 @@
 # Time Log
 
-**Live demo:** https://naarrzz.github.io/time-log/ (tap "Subukan nang walang account" to try it; logs stay in your browser)
+**Live demo:** https://naarrzz.github.io/time-log/ (tap "Try muna, no account" to try it; logs stay in your browser)
 
 A one-tap personal time audit app, built to see where my hours actually go between work, school, coaching, content and training.
 

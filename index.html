@@ -146,6 +146,22 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
 .login .btn { padding: 12px 14px; font-size: 14px; }
 .login .btn:disabled { opacity: .6; }
 .login hr { width: 100%; border: 0; border-top: 1px solid var(--line); margin: 8px 0 0; }
+.credit { text-align: center; font-size: 12px; color: var(--ink-soft); margin: 8px 0 0; }
+/* Live card actions, tile header */
+.live-actions { justify-content: flex-end; flex-wrap: nowrap; gap: 6px; }
+.ask-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 10px; }
+.ask-row .ask { margin: 0; }
+/* Edit log times */
+.time-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
+.time-row label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 600; color: var(--ink-soft); }
+.time-row input { font: 16px var(--body); color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; min-height: 40px; }
+/* Edit tiles */
+.cat-row { display: grid; grid-template-columns: 40px 1fr 40px auto; gap: 8px; align-items: center; }
+.cat-row.off input { opacity: .4; }
+.cat-row input[type="color"] { width: 40px; height: 40px; padding: 2px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+.cat-row input[type="text"] { font: 16px var(--body); color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; min-width: 0; width: 100%; }
+.cat-row .btn { padding: 8px 10px; min-height: 40px; }
+#cats-list { display: flex; flex-direction: column; gap: 8px; }
 [hidden] { display: none !important; }
 @media (prefers-reduced-motion: reduce) { .tile { transition: none; } }
 </style>
@@ -153,17 +169,18 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
 <body>
 <main class="login" id="login" hidden>
   <h1>Time Log</h1>
-  <p class="empty">Mag-login para ma-sync ang logs mo sa lahat ng device.</p>
+  <p class="empty">Login muna, para synced logs mo kahit saang device.</p>
   <form id="login-form">
     <label>Email <input id="login-email" type="email" autocomplete="username" autocapitalize="none" required></label>
     <label>Password <input id="login-pass" type="password" autocomplete="current-password" required></label>
     <p class="sync warn" id="login-err" role="alert" style="margin:0" hidden></p>
-    <button class="btn primary" id="login-btn" type="submit">Mag-login</button>
-    <button class="btn" id="login-switch" type="button">Wala pang account? Gumawa dito</button>
+    <button class="btn primary" id="login-btn" type="submit">Login</button>
+    <button class="btn" id="login-switch" type="button">Wala pang account? Gawa tayo</button>
   </form>
   <hr>
-  <button class="btn" id="guest-btn" type="button">Subukan nang walang account</button>
-  <p class="sync" style="margin:0">Sa browser na 'to lang mase-save ang logs kapag walang account.</p>
+  <button class="btn" id="guest-btn" type="button">Try muna, no account</button>
+  <p class="sync" style="margin:0">Heads up: sa browser na 'to lang mase-save logs mo.</p>
+  <p class="credit">by Narz Angelo Alcaide</p>
 </main>
 
 <div class="app" id="app" hidden>
@@ -181,21 +198,21 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
       <div class="live" id="live">
         <div class="swatch" id="live-swatch"></div>
         <div class="what">
-          <p class="label" id="live-label">Walang naka-log ngayon</p>
-          <p class="cat" id="live-cat">Tap kung ano ginagawa mo</p>
+          <p class="label" id="live-label">Wala kang ganap?</p>
+          <p class="cat" id="live-cat">Tap ka lang sa baba</p>
         </div>
         <div style="text-align:right">
           <div class="timer" id="live-timer"></div>
-          <button class="btn stop" id="stop-btn" hidden>Itigil</button>
+          <div class="chips live-actions"><button class="btn stop" id="live-edit" hidden>Edit</button><button class="btn stop" id="stop-btn" hidden>Stop na</button></div>
         </div>
       </div>
       <div class="tagrow" id="live-tags" hidden></div>
       <div>
-        <p class="ask">Ano ginagawa mo ngayon?</p>
+        <div class="ask-row"><p class="ask">So, anong ganap?</p><button class="btn" id="cats-edit">Edit tiles</button></div>
         <div class="tiles" id="tiles"></div>
       </div>
       <div class="card">
-        <h2>Ngayong araw</h2>
+        <h2>Today so far</h2>
         <div class="bar" id="today-bar"></div>
         <div class="axis"><span>12 AM</span><span>6 AM</span><span>12 PM</span><span>6 PM</span><span>12 AM</span></div>
         <div class="rows" id="today-totals"></div>
@@ -217,15 +234,15 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
       <div class="card" id="gap-card">
         <p class="label" id="gap-count" style="color:var(--ink-soft);font-size:13px;margin:0"></p>
         <p class="gap-q" id="gap-time"></p>
-        <p class="gap-sub" id="gap-sub">Ano ginawa mo dito?</p>
+        <p class="gap-sub" id="gap-sub">Anong ganap dito?</p>
         <div class="tiles" id="gap-tiles"></div>
         <div class="chips" style="margin-top:12px">
-          <button class="btn" id="gap-skip">Laktawan</button>
+          <button class="btn" id="gap-skip">Skip</button>
         </div>
       </div>
       <div class="card" id="gap-done" hidden>
         <h2>Walang gaps</h2>
-        <p class="empty" id="gap-done-text">Kumpleto ang log mo para sa araw na ito.</p>
+        <p class="empty" id="gap-done-text">Kumpleto today. Ang sipag, infairness.</p>
       </div>
     </div>
   </section>
@@ -234,11 +251,11 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
   <section id="view-week" class="view" hidden>
     <div style="display:flex;flex-direction:column;gap:18px">
       <div class="card">
-        <h2>Huling 7 araw</h2>
+        <h2>Last 7 days</h2>
         <div class="week" id="week-days"></div>
       </div>
       <div class="card">
-        <h2>Saan napunta ang oras</h2>
+        <h2>Saan napunta oras mo?</h2>
         <div class="rows" id="week-totals"></div>
       </div>
       <div class="card">
@@ -249,12 +266,13 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
         <h2>Data mo</h2>
         <p class="empty" id="acct-who" style="margin-bottom:12px"></p>
         <div class="chips">
-          <button class="btn" id="export-btn">I-download ang backup</button>
-          <button class="btn" id="signout-btn">Mag-sign out</button>
+          <button class="btn" id="export-btn">Backup muna</button>
+          <button class="btn" id="signout-btn">Sign out</button>
         </div>
       </div>
     </div>
   </section>
+  <p class="credit">by Narz Angelo Alcaide</p>
 </div>
 
 <div class="toast" id="toast" role="status" aria-live="polite">
@@ -264,13 +282,33 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
 
 <div class="sheet-wrap" id="sheet-wrap">
   <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title">
-    <h3 id="sheet-title">Ayusin ang log</h3>
+    <h3 id="sheet-title">Ayusin natin 'to</h3>
+    <div class="time-row">
+      <label>Start <input type="time" id="sheet-start"></label>
+      <label>End <input type="time" id="sheet-end"></label>
+      <button class="btn primary" id="sheet-save-time" hidden>Save time</button>
+    </div>
+    <p class="sync warn" id="sheet-err" role="alert" style="margin:0" hidden></p>
     <p class="empty" id="sheet-sub"></p>
     <div class="tiles" id="sheet-tiles"></div>
     <div class="tagrow" id="sheet-tags"></div>
     <div class="chips">
       <button class="btn" id="sheet-delete">Delete</button>
       <button class="btn primary" id="sheet-close">Done</button>
+    </div>
+  </div>
+</div>
+
+<div class="sheet-wrap" id="cats-wrap">
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="cats-title">
+    <h3 id="cats-title">Edit tiles</h3>
+    <p class="empty">Rename, recolor, reorder, go. Safe pa rin ang old logs kahit tanggalin mo ang tile.</p>
+    <div id="cats-list"></div>
+    <p class="sync warn" id="cats-err" role="alert" style="margin:0" hidden></p>
+    <div class="chips">
+      <button class="btn" id="cats-add">+ Add tile</button>
+      <button class="btn" id="cats-cancel">Cancel</button>
+      <button class="btn primary" id="cats-save">Save</button>
     </div>
   </div>
 </div>
@@ -286,7 +324,7 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 <script>
 (() => {
-  const CATS = [
+  const DEFAULT_CATS = [
     { id: "intern", name: "Internship",      c: "#2F6FBF" },
     { id: "school",   name: "School",        c: "#7A4FC9" },
     { id: "review",   name: "Review",   c: "#C2437A" },
@@ -300,7 +338,12 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
     { id: "scroll",   name: "Scroll",  c: "#D14B4B" },
     { id: "tulog",    name: "Tulog/Pahinga", c: "#3E4A7A" }
   ];
-  const CAT = Object.fromEntries(CATS.map(c => [c.id, c]));
+  // Tiles are per-account data. A removed tile stays here as hidden, so its old logs keep their name and color.
+  let CATS = DEFAULT_CATS, CAT = {};
+  function setCats(list) { CATS = list; CAT = Object.fromEntries(list.map(c => [c.id, c])); }
+  setCats(DEFAULT_CATS);
+  const shownCats = () => CATS.filter(c => !c.hidden);
+  const standbyOn = () => CAT.intern && !CAT.intern.hidden;
   const MIN = 60000, HOUR = 3600000, DAY = 86400000;
   const GAP_MIN = 15 * MIN;
 
@@ -316,7 +359,7 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
     return [new Date(d).setHours(9, 0, 0, 0), new Date(d).setHours(18, 0, 0, 0)];
   };
   const inWorkHours = t => { const w = workSpan(t); return !!w && t >= w[0] && t < w[1]; };
-  const autoKas = (cat, t) => (cat !== "intern" && inWorkHours(t)) ? [{ cat: "intern", start: t, auto: true }] : [];
+  const autoKas = (cat, t) => (cat !== "intern" && standbyOn() && inWorkHours(t)) ? [{ cat: "intern", start: t, auto: true }] : [];
   const kasEnd = (k, t) => k.auto && workSpan(k.start) ? Math.min(t, workSpan(k.start)[1]) : t;   // auto standby stops at 6 PM
   const createdOf = s => s.c || (s.id && s.id.length > 5 ? parseInt(s.id.slice(0, -5), 36) : 0) || 0;
 
@@ -340,8 +383,9 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
   const fmtHrs = ms => (ms / HOUR).toFixed(1) + "h";
   const fmtClock = ms => { const s = Math.max(0, Math.floor(ms / 1000)); return Math.floor(s / 3600) + ":" + pad(Math.floor(s / 60) % 60) + ":" + pad(s % 60); };
   const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
-  const DOW = ["Lin", "Lun", "Mar", "Miy", "Huw", "Biy", "Sab"];
-  const MON = ["Ene", "Peb", "Mar", "Abr", "May", "Hun", "Hul", "Ago", "Set", "Okt", "Nob", "Dis"];
+  const toHM = t => { const d = new Date(t); return pad(d.getHours()) + ":" + pad(d.getMinutes()); };
+  const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   const dayLabel = key => { const [y, m, d] = key.split("-").map(Number); const dt = new Date(y, m - 1, d); return DOW[dt.getDay()] + ", " + MON[m - 1] + " " + d; };
 
   // ---------- storage (Firestore when signed in, this browser only in guest mode) ----------
@@ -356,7 +400,7 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
   };
   let auth = null, db = null, root = "", mode = "loading";
   function localSave() {
-    try { localStorage.setItem("oraslog", JSON.stringify({ current, days, kasabay: kasDays })); } catch (e) {}
+    try { localStorage.setItem("oraslog", JSON.stringify({ current, days, kasabay: kasDays, cats: CATS })); } catch (e) {}
   }
   function parseCurrent(b) {
     if (!b || b.active === false || !b.cat) return null;
@@ -365,7 +409,7 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
     return { cat: b.cat, start: b.start, kas };
   }
   function localLoad() {
-    try { const raw = localStorage.getItem("oraslog"); if (raw) { const o = JSON.parse(raw); current = parseCurrent(o.current); Object.assign(days, o.days || {}); Object.assign(kasDays, o.kasabay || {}); } } catch (e) {}
+    try { const raw = localStorage.getItem("oraslog"); if (raw) { const o = JSON.parse(raw); current = parseCurrent(o.current); Object.assign(days, o.days || {}); Object.assign(kasDays, o.kasabay || {}); if (Array.isArray(o.cats) && o.cats.length) setCats(o.cats); } } catch (e) {}
     Object.keys(days).forEach(k => { if (normalizeDay(k)) saveDay(k); });
   }
   function saveDay(key) {
@@ -382,6 +426,10 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
     if (mode !== "db") { localSave(); return Promise.resolve(); }
     const body = current ? { active: true, cat: current.cat, start: current.start, kas: current.kas || [] } : { active: false };
     return db.doc(root + "/state/current").set(body).catch(onWriteError);
+  }
+  function saveCats() {
+    if (mode !== "db") { localSave(); return; }
+    db.doc(root + "/state/categories").set({ list: CATS }).catch(onWriteError);
   }
   function setSync(text, warn) {
     const s = $("sync");
@@ -529,20 +577,20 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
       addKas(k.cat, k.start, kasEnd(k, now));
       current.kas = current.kas.filter(x => x !== k);
       saveCurrent(); render();
-      showToast("Tapos na ang Kasabay na " + CAT[cat].name + ".", []);
+      showToast("Okay, tapos na ang side quest na " + CAT[cat].name + ".", []);
       return;
     }
     current.kas = (current.kas || []).concat([{ cat, start: now }]);
     kasTap = now;
     saveCurrent(); render();
-    showToast("Kasabay ng " + CAT[current.cat].name + ": " + CAT[cat].name + ". Kanina pa ba?", [15, 30, 60], m => backdateKas(cat, m), now);
+    showToast(CAT[current.cat].name + " + " + CAT[cat].name + "? Multitasker ka ah. Kanina pa ba 'yan?", [15, 30, 60], m => backdateKas(cat, m), now);
   }
   function backdateKas(cat, mins) {
     const k = current && (current.kas || []).find(x => x.cat === cat);
     if (!k) return;
     k.start = Math.max(current.start, kasTap - mins * MIN);   // can't start before the main activity did
     saveCurrent(); render();
-    showToast("Kasabay na " + CAT[cat].name + ", simula " + fmtTime(k.start) + ".", []);
+    showToast("Noted, " + CAT[cat].name + " since " + fmtTime(k.start) + ".", []);
   }
   function switchTo(cat) {
     const now = Date.now();
@@ -550,14 +598,14 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
     if (current && current.cat === cat) {
       current = null;
       saveCurrent(); render();
-      showToast("Itinigil ang " + CAT[cat].name + ".", []);
+      showToast("Tapos na ang " + CAT[cat].name + ". Nice.", []);
       return;
     }
     const kas = autoKas(cat, now);
     current = { cat, start: now, kas };
     toastTap = now;
     saveCurrent(); render();
-    showToast("Nagsimula ang " + CAT[cat].name + " ngayon." + (kas.length ? " Kasabay: Internship." : "") + " Kanina pa ba?", [15, 30, 60]);
+    showToast(CAT[cat].name + ", noted!" + (kas.length ? " Kasabay ng " + CAT.intern.name + "." : "") + " Kanina pa ba 'yan?", [15, 30, 60]);
   }
   function stopNow() {
     if (!current) return;
@@ -565,23 +613,23 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
     const name = CAT[current.cat].name;
     current = null;
     saveCurrent(); render();
-    showToast("Itinigil ang " + name + ".", []);
+    showToast("Tapos na ang " + name + ". Nice.", []);
   }
   function backdate(mins) {
     if (!current) return;
     const newStart = toastTap - mins * MIN;
     const now = Date.now();
     const touched = carve(newStart, now);
-    carveKas(newStart, toastTap).forEach(k => touched.add(k));   // those logs are gone, so their Kasabay go too
+    if (newStart < current.start) carveKas(newStart, current.start).forEach(k => touched.add(k));   // those logs are gone, so their Kasabay go too
     touched.forEach(k => saveDay(k));
+    const moved = newStart < current.start;
     current.start = newStart;
     (current.kas || []).forEach(k => {
-      if (!k.auto) return;
-      const w = workSpan(newStart);
-      k.start = w ? Math.max(newStart, w[0]) : k.start;
+      if (k.auto && moved) { const w = workSpan(newStart); if (w) k.start = Math.max(newStart, w[0]); }
+      k.start = Math.max(k.start, newStart);    // a Kasabay can't start before the main activity
     });
     saveCurrent(); render();
-    showToast(CAT[current.cat].name + ", simula " + fmtTime(newStart) + ".", []);
+    showToast("Noted, " + CAT[current.cat].name + " since " + fmtTime(newStart) + ".", []);
   }
   // cats: which chips to show. labelOf: optional chip text. extra: optional trailing chip { text, onClick }.
   function kasButtons(el, cats, isOn, onToggle, labelOf, extra) {
@@ -607,26 +655,27 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
   // ---------- toast ----------
   const hideToast = () => { clearTimeout(toastTimer); $("toast").classList.remove("show"); };
   // Ask for an exact start time. tap is the moment "now" meant when the tile was tapped.
-  function askStartTime(onPick, tap) {
+  function askStartTime(onPick, tap, shown) {
     clearTimeout(toastTimer);   // stay open while they pick
-    $("toast-text").textContent = "Anong oras nagsimula?";
+    $("toast-text").textContent = "Since when?";
+    $("toast").classList.add("show");
     const chips = $("toast-chips"); chips.innerHTML = "";
     const input = document.createElement("input");
     input.type = "time"; input.className = "toast-time"; input.setAttribute("aria-label", "Oras ng simula");
-    const t0 = new Date(tap); input.value = pad(t0.getHours()) + ":" + pad(t0.getMinutes());
-    const ok = document.createElement("button"); ok.className = "btn"; ok.textContent = "I-set";
-    const no = document.createElement("button"); no.className = "btn"; no.textContent = "Huwag na";
+    const t0 = new Date(shown); input.value = pad(t0.getHours()) + ":" + pad(t0.getMinutes());
+    const ok = document.createElement("button"); ok.className = "btn"; ok.textContent = "Goods";
+    const no = document.createElement("button"); no.className = "btn"; no.textContent = "Wag na";
     no.addEventListener("click", hideToast);
     ok.addEventListener("click", () => {
       const [h, m] = input.value.split(":").map(Number);
       if (isNaN(h) || isNaN(m)) return;
       let t = new Date(tap).setHours(h, m, 0, 0);
       if (t > tap) t -= DAY;                     // 11:50 PM picked at 12:10 AM means last night
-      if (tap - t > 12 * HOUR) { $("toast-text").textContent = "Mamaya pa ang oras na 'yan. Pumili ulit."; return; }
+      if (tap - t > 12 * HOUR) { $("toast-text").textContent = "Time traveler ka? Mamaya pa 'yan. Pili ulit."; return; }
       if (!onPick) {                             // the main activity replaces whatever was logged in that stretch
         const logged = sessionsFor(keyOf(t), false).concat(keyOf(t) === keyOf(tap) ? [] : sessionsFor(keyOf(tap), false))
           .reduce((a, s) => a + overlapMs(s, { start: t, end: tap }), 0);
-        if (logged >= MIN && !confirm("Mapapalitan nito ang " + fmtDur(logged) + " na naka-log na. Tuloy?")) return;
+        if (logged >= MIN && !confirm("Mapapalitan nito ang " + fmtDur(logged) + " na naka-log na. Sure ka?")) return;
       }
       (onPick || backdate)((tap - t) / MIN);
     });
@@ -641,9 +690,9 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
       b.addEventListener("click", fn);
       chips.appendChild(b);
     };
-    if (mins.length) add("Hindi, ngayon lang", hideToast);
-    mins.forEach(m => add(m === 60 ? "1 oras na" : m + " min na", () => (onPick || backdate)(m)));
-    if (mins.length) add("Ibang oras", () => askStartTime(onPick, tap || toastTap));
+    if (mins.length) add("Nope, ngayon lang", hideToast);
+    mins.forEach(m => add(m === 60 ? "1 hour na" : m + " mins na", () => (onPick || backdate)(m)));
+    if (mins.length) add("Iba, pili ako", () => askStartTime(onPick, tap || toastTap, tap || toastTap));
     chips.hidden = !mins.length;
     $("toast").classList.add("show");
     clearTimeout(toastTimer);
@@ -739,7 +788,7 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
     suffix = suffix || "% ng naka-log";
     el.innerHTML = "";
     const entries = Object.entries(t).sort((a, b) => b[1] - a[1]);
-    if (!entries.length) { const p = document.createElement("p"); p.className = "empty"; p.textContent = "Wala pang naka-log."; el.appendChild(p); return; }
+    if (!entries.length) { const p = document.createElement("p"); p.className = "empty"; p.textContent = "Wala pa. Chill ka pa siguro."; el.appendChild(p); return; }
     entries.forEach(([id, ms]) => {
       const c = CAT[id] || { name: id, c: "#999" };
       const r = document.createElement("div"); r.className = "row";
@@ -762,13 +811,14 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
       const c = CAT[current.cat];
       $("live-swatch").style.background = c.c;
       const chain = liveChainStart();
-      $("live-label").textContent = "Ginagawa mo mula " + fmtTime(chain);
+      $("live-label").textContent = "Busy since " + fmtTime(chain);
       $("live-cat").textContent = c.name;
       $("live-timer").textContent = fmtClock(now - chain);
       $("stop-btn").hidden = false;
+      $("live-edit").hidden = false;
       $("live-tags").hidden = false;
       const running = activeKas();
-      const others = CATS.map(x => x.id).filter(id => id !== current.cat);
+      const others = shownCats().map(x => x.id).filter(id => id !== current.cat);
       const onNow = id => running.some(k => k.cat === id);
       const cats = showAllKas ? others : others.filter(id => KAS_QUICK.includes(id) || onNow(id));
       kasButtons($("live-tags"), cats, onNow, id => toggleKas(id), id => {
@@ -778,22 +828,23 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
     } else {
       $("live-tags").hidden = true;
       $("live-swatch").style.background = "var(--line)";
-      $("live-label").textContent = "Walang naka-log ngayon";
-      $("live-cat").textContent = "Tap kung ano ginagawa mo";
+      $("live-label").textContent = "Wala kang ganap?";
+      $("live-cat").textContent = "Tap ka lang sa baba";
       $("live-timer").textContent = "";
       $("stop-btn").hidden = true;
+      $("live-edit").hidden = true;
     }
 
     // tiles
     const tiles = $("tiles"); tiles.innerHTML = "";
-    CATS.forEach(c => tiles.appendChild(tileButton(c, () => switchTo(c.id), current && current.cat === c.id)));
+    shownCats().forEach(c => tiles.appendChild(tileButton(c, () => switchTo(c.id), current && current.cat === c.id)));
 
     // today
     const list = sessionsFor(today, true);
     renderBar($("today-bar"), list, midnight(now));
     totalsRows($("today-totals"), totals(list));
     const tl = $("today-list"); tl.innerHTML = "";
-    if (!list.length) { const p = document.createElement("p"); p.className = "empty"; p.textContent = "Mag-tap ng tile sa itaas para magsimula."; tl.appendChild(p); }
+    if (!list.length) { const p = document.createElement("p"); p.className = "empty"; p.textContent = "Empty pa. Tap ka ng tile sa taas."; tl.appendChild(p); }
     // The running log and the back-to-back log before it show as one row.
     const chainStart = Math.max(liveChainStart(), midnight(now));
     const rows = current ? list.filter(x => x.live || x.start < chainStart).map(x => x.live ? Object.assign({}, x, { start: chainStart }) : x) : list;
@@ -823,20 +874,20 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
     $("gap-badge").hidden = !badgeN; $("gap-badge").textContent = badgeN;
     if (!gaps.length) {
       $("gap-card").hidden = true; $("gap-done").hidden = false;
-      $("gap-done-text").textContent = "Kumpleto ang log mo para sa " + (gapDay === "today" ? "araw na ito" : "kahapon") + ".";
+      $("gap-done-text").textContent = gapDay === "today" ? "Kumpleto today. Ang sipag, infairness." : "Kumpleto kahapon. Love that for you.";
       return;
     }
     $("gap-card").hidden = false; $("gap-done").hidden = true;
     const g = gaps[0];
-    $("gap-count").textContent = gaps.length + (gaps.length === 1 ? " gap" : " gaps") + " na hindi pa naka-log";
+    $("gap-count").textContent = gaps.length + (gaps.length === 1 ? " gap" : " gaps") + " na di pa naka-log";
     $("gap-time").textContent = fmtTime(g.start) + " – " + fmtTime(g.end);
-    $("gap-sub").textContent = fmtDur(g.end - g.start) + ". Ano ginawa mo dito?";
+    $("gap-sub").textContent = fmtDur(g.end - g.start) + ". Anong ganap dito?";
     const gt = $("gap-tiles"); gt.innerHTML = "";
-    CATS.forEach(c => gt.appendChild(tileButton(c, () => {
+    shownCats().forEach(c => gt.appendChild(tileButton(c, () => {
       addSession(c.id, g.start, g.end);
-      const w = c.id !== "intern" && workSpan(g.start);
+      const w = c.id !== "intern" && standbyOn() && workSpan(g.start);
       if (w) addKas("intern", Math.max(g.start, w[0]), Math.min(g.end, w[1]));
-      render(); showToast(fmtDur(g.end - g.start) + " na " + c.name + ", naka-log.", []);
+      render(); showToast(fmtDur(g.end - g.start) + " na " + c.name + ". Sakto, noted!", []);
     }, false)));
     $("gap-skip").onclick = () => { skipped.add(key + ":" + g.start); renderGaps(); };
   }
@@ -885,7 +936,7 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
     };
     if (!dividedMs && !finActive) {
       const p = document.createElement("p"); p.className = "empty";
-      p.textContent = "Wala pang Kasabay. Mag-tap ng Kasabay kapag may ginagawa kang iba nang sabay.";
+      p.textContent = "Wala pang Kasabay. Focused ka ba talaga, or di mo lang tina-tap?";
       wt.appendChild(p); return;
     }
     const top = document.createElement("div"); top.className = "rows"; top.style.marginTop = "0";
@@ -894,7 +945,7 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
     wt.appendChild(top);
     const topPairs = Object.entries(pairs).sort((a, b) => b[1] - a[1]).slice(0, 5);
     if (topPairs.length) {
-      const h = document.createElement("p"); h.className = "sub-h"; h.textContent = "Pinakamadalas pagsabayin";
+      const h = document.createElement("p"); h.className = "sub-h"; h.textContent = "Favorite combo mo";
       const rows = document.createElement("div"); rows.className = "rows";
       topPairs.forEach(([p, ms]) => {
         const [main, kas] = p.split("+");
@@ -911,9 +962,13 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
     const find = () => (days[key] || []).find(s => s.id === id);
     const x = find(); if (!x) return;
     editing = { key, id };
-    $("sheet-sub").textContent = fmtTime(x.start) + " – " + fmtTime(x.end) + " · " + fmtDur(x.end - x.start) + ". Palitan ang category:";
+    $("sheet-start").value = toHM(x.start);
+    $("sheet-end").value = toHM(x.end);
+    $("sheet-save-time").hidden = true;
+    $("sheet-err").hidden = true;
+    $("sheet-sub").textContent = fmtDur(x.end - x.start) + " ito. Palitan ang category?";
     const st = $("sheet-tiles"); st.innerHTML = "";
-    CATS.forEach(c => st.appendChild(tileButton(c, () => {
+    shownCats().forEach(c => st.appendChild(tileButton(c, () => {
       const s = find();
       if (s) { carveKas(s.start, s.end, c.id); s.cat = c.id; saveDay(key); }   // a log can't be Kasabay of itself
       closeSheet(); render();
@@ -922,7 +977,7 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
     const drawKas = () => {
       const s = find(); if (!s) { closeSheet(); return; }
       const inLog = id => (kasDays[key] || []).filter(k => k.cat === id && overlapMs(k, s) > 0);
-      kasButtons($("sheet-tags"), CATS.map(c => c.id).filter(c => c !== s.cat), id => inLog(id).length > 0, (catId, on) => {
+      kasButtons($("sheet-tags"), shownCats().map(c => c.id).filter(c => c !== s.cat), id => inLog(id).length > 0, (catId, on) => {
         const cur = find(); if (!cur) { closeSheet(); return; }
         carveKas(cur.start, cur.end, catId);
         if (on) (kasDays[key] = kasDays[key] || []).push({ id: uid(), c: Date.now(), cat: catId, start: cur.start, end: cur.end });
@@ -936,6 +991,89 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
     $("sheet-wrap").classList.add("show");
   }
   function closeSheet() { $("sheet-wrap").classList.remove("show"); editing = null; }
+  function sheetTimeChanged() {
+    const s = editing && (days[editing.key] || []).find(v => v.id === editing.id);
+    $("sheet-save-time").hidden = !s || ($("sheet-start").value === toHM(s.start) && $("sheet-end").value === toHM(s.end));
+  }
+  $("sheet-start").addEventListener("input", sheetTimeChanged);
+  $("sheet-end").addEventListener("input", sheetTimeChanged);
+  $("sheet-save-time").addEventListener("click", () => {
+    if (!editing) return;
+    const key = editing.key, id = editing.id, s = (days[key] || []).find(v => v.id === id);
+    if (!s) { closeSheet(); return; }
+    const fail = text => { $("sheet-err").textContent = text; $("sheet-err").hidden = false; };
+    const d0 = midnight(new Date(key.replace(/-/g, "/")).getTime());
+    const at = hm => { const [h, m] = hm.split(":").map(Number); return new Date(d0).setHours(h, m, 0, 0); };
+    if (!$("sheet-start").value || !$("sheet-end").value) { fail("Lagyan muna ng oras pareho."); return; }
+    // An untouched field keeps its exact time, so it still lines up with the log next to it.
+    const ns = $("sheet-start").value === toHM(s.start) ? s.start : at($("sheet-start").value);
+    const ne = $("sheet-end").value === toHM(s.end) ? s.end : ($("sheet-end").value === "00:00" ? d0 + DAY : at($("sheet-end").value));
+    if (ne - ns < MIN) { fail("Dapat mas maaga ang start kaysa sa end."); return; }
+    if (ne > Date.now() + MIN) { fail("Time traveler ka? Di pa nangyayari 'yan."); return; }
+    if (current && ne > current.start) { fail("Sumasabit 'yan sa ginagawa mo ngayon. Stop mo muna, or i-edit ang start noon."); return; }
+    const others = (days[key] || []).filter(v => v.id !== id);
+    const logged = others.reduce((a, v) => a + overlapMs(v, { start: ns, end: ne }), 0);
+    if (logged >= MIN && !confirm("Mapapalitan nito ang " + fmtDur(logged) + " na naka-log na. Sure ka?")) return;
+    days[key] = others;
+    const touched = carve(ns, ne);
+    touched.add(key);
+    days[key].push(Object.assign({}, s, { start: ns, end: ne, c: Date.now() }));
+    // Keep the Kasabay in the part both versions share. Time gained or lost takes its Kasabay out.
+    [[Math.min(s.start, ns), Math.max(s.start, ns)], [Math.min(s.end, ne), Math.max(s.end, ne)]].forEach(([a, b]) => {
+      if (b > a) carveKas(a, b).forEach(k => touched.add(k));
+    });
+    touched.forEach(k => saveDay(k));
+    closeSheet(); render();
+    showToast("Goods, naayos na.", []);
+  });
+
+  // ---------- edit tiles ----------
+  let catDraft = [];
+  function drawCats() {
+    const el = $("cats-list"); el.innerHTML = "";
+    catDraft.forEach((c, i) => {
+      const r = document.createElement("div"); r.className = "cat-row" + (c.hidden ? " off" : "");
+      const color = document.createElement("input");
+      color.type = "color"; color.value = c.c; color.setAttribute("aria-label", "Kulay ng " + (c.name || "tile"));
+      color.addEventListener("input", () => { c.c = color.value; });
+      const name = document.createElement("input");
+      name.type = "text"; name.value = c.name; name.maxLength = 24; name.placeholder = "Pangalan"; name.setAttribute("aria-label", "Pangalan ng tile");
+      name.addEventListener("input", () => { c.name = name.value; });
+      const up = document.createElement("button");
+      up.className = "btn"; up.textContent = "↑"; up.disabled = i === 0; up.setAttribute("aria-label", "Itaas");
+      up.addEventListener("click", () => { [catDraft[i - 1], catDraft[i]] = [catDraft[i], catDraft[i - 1]]; drawCats(); });
+      const off = document.createElement("button");
+      off.className = "btn"; off.textContent = c.hidden ? "Ibalik" : "Remove";
+      off.addEventListener("click", () => { c.hidden = !c.hidden; drawCats(); });
+      r.append(color, name, up, off);
+      el.appendChild(r);
+    });
+  }
+  $("cats-edit").addEventListener("click", () => {
+    catDraft = CATS.map(c => Object.assign({}, c));
+    $("cats-err").hidden = true;
+    drawCats();
+    $("cats-wrap").classList.add("show");
+  });
+  $("cats-add").addEventListener("click", () => {
+    catDraft.push({ id: uid(), name: "", c: "#4FB394", isNew: true });
+    drawCats();
+    const inputs = $("cats-list").querySelectorAll('input[type="text"]');
+    inputs[inputs.length - 1].focus();
+  });
+  const closeCats = () => $("cats-wrap").classList.remove("show");
+  $("cats-cancel").addEventListener("click", closeCats);
+  $("cats-save").addEventListener("click", () => {
+    const fail = text => { $("cats-err").textContent = text; $("cats-err").hidden = false; };
+    const list = catDraft.filter(c => !(c.isNew && (c.hidden || !c.name.trim())))   // an unfinished new tile just goes away
+      .map(c => { const o = Object.assign({}, c, { name: c.name.trim() }); delete o.isNew; if (!o.hidden) delete o.hidden; return o; });
+    if (list.some(c => !c.name)) { fail("May tile na walang pangalan."); return; }
+    if (!list.some(c => !c.hidden)) { fail("Kailangan ng kahit isang tile."); return; }
+    setCats(list);
+    saveCats();
+    closeCats(); render();
+    showToast("Goods, updated na tiles mo.", []);
+  });
   $("sheet-close").addEventListener("click", closeSheet);
   $("sheet-wrap").addEventListener("click", e => { if (e.target.id === "sheet-wrap") closeSheet(); });
   $("sheet-delete").addEventListener("click", () => {
@@ -946,6 +1084,11 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
     saveDay(editing.key); closeSheet(); render();
   });
   $("stop-btn").addEventListener("click", stopNow);
+  $("live-edit").addEventListener("click", () => {
+    if (!current) return;
+    toastTap = Date.now();
+    askStartTime(null, toastTap, current.start);
+  });
 
   // ---------- tabs ----------
   const tabs = { now: "view-now", gaps: "view-gaps", week: "view-week" };
@@ -1013,6 +1156,12 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
       syncMeta.current = snap.metadata; showSync();
       render();
     }, onListenError);
+    db.doc(root + "/state/categories").onSnapshot(live, snap => {
+      const b = snap.exists ? snap.data() : null;
+      if (b && Array.isArray(b.list) && b.list.length) setCats(b.list);
+      syncMeta.cats = snap.metadata; showSync();
+      render();
+    }, onListenError);
   }
 
   // ---------- login ----------
@@ -1029,8 +1178,8 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
   let signingUp = false;
   $("login-switch").addEventListener("click", () => {
     signingUp = !signingUp;
-    $("login-btn").textContent = signingUp ? "Gumawa ng account" : "Mag-login";
-    $("login-switch").textContent = signingUp ? "May account na? Mag-login dito" : "Wala pang account? Gumawa dito";
+    $("login-btn").textContent = signingUp ? "Gawa na" : "Login";
+    $("login-switch").textContent = signingUp ? "May account na pala? Login dito" : "Wala pang account? Gawa tayo";
     $("login-pass").autocomplete = signingUp ? "new-password" : "current-password";
     $("login-err").hidden = true;
   });
@@ -1063,7 +1212,7 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
     } else {
       Object.keys(days).forEach(k => { all[k] = { sessions: days[k], kasabay: kasDays[k] || [] }; });
     }
-    const text = JSON.stringify({ exportedAt: new Date().toISOString(), current, days: all }, null, 2);
+    const text = JSON.stringify({ exportedAt: new Date().toISOString(), categories: CATS, current, days: all }, null, 2);
     const name = "time-log-backup-" + keyOf(Date.now()) + ".json";
     const file = new File([text], name, { type: "application/json" });
     if (navigator.canShare && navigator.canShare({ files: [file] })) {
@@ -1076,7 +1225,7 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
     setTimeout(() => URL.revokeObjectURL(a.href), 10000);
   }
   $("export-btn").addEventListener("click", () => {
-    exportData().catch(() => showToast("Hindi na-download ang backup. Subukan ulit.", []));
+    exportData().catch(() => showToast("Di na-download ang backup. Try ulit?", []));
   });
 
   // ---------- start ----------
