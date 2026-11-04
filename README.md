@@ -1,5 +1,7 @@
 # Time Log
 
+**Live demo:** https://naarrzz.github.io/time-log/ (saves to your browser only)
+
 A one-tap personal time audit app, built to see where my hours actually go between work, school, coaching, content and training.
 
 - **Ngayon**: tap what you're doing; the timer runs until you tap something else. Forgot to switch? Backdate with 15 / 30 / 60 min chips.
