@@ -14,6 +14,7 @@ A one-tap personal time audit app, built to see where my hours actually go betwe
 
 - **Sync and offline**: signed-in logs sync through Cloud Firestore in real time and keep working with no internet.
 - **Backup**: download every log as a JSON file.
+- **Themes**: Auto, Light, Dim and Dark, saved per device.
 
 Single-file HTML/CSS/JS with no build step, plus a small service worker so the home screen app opens offline. `firestore.rules` limits each account to its own logs, which is why the Firebase web config can sit in public code.
 
