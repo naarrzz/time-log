@@ -9,4 +9,4 @@ A one-tap personal time audit app, built to see where my hours actually go betwe
 - **Linggo**: last 7 days, totals per category, and a Kasabay summary.
 - **Kasabay tags**: things happening alongside the main activity (eating, Work standby). They never add time, so daily totals stay honest.
 
-Single-file HTML/CSS/JS. Runs as a Claude artifact with per-user sync, and falls back to browser storage anywhere else.
+Single-file HTML/CSS/JS. No build step, no dependencies. Logs are saved in your browser.
