@@ -123,6 +123,11 @@ nav.tabs button { flex: 1; appearance: none; border: 0; background: transparent;
   font: 600 13px var(--body); padding: 10px 4px; border-radius: 12px; cursor: pointer; position: relative; }
 nav.tabs button.on { color: var(--ink); background: var(--bg); }
 nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin-left: 4px; border-radius: 9px; background: #B4542A; color: #fff; font-size: 11px; line-height: 18px; }
+/* Kasabay (secondary) tags */
+.tagrow { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.tagrow .lbl { font-size: 12px; color: var(--ink-soft); margin-right: 2px; }
+.btn.tag[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.sub-h { font-size: 12px; color: var(--ink-soft); margin: 14px 0 0; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
 [hidden] { display: none !important; }
 @media (prefers-reduced-motion: reduce) { .tile { transition: none; } }
 </style>
@@ -151,6 +156,7 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
           <button class="btn stop" id="stop-btn" hidden>Itigil</button>
         </div>
       </div>
+      <div class="tagrow" id="live-tags" hidden></div>
       <div>
         <p class="ask">Ano ginagawa mo ngayon?</p>
         <div class="tiles" id="tiles"></div>
@@ -202,6 +208,10 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
         <h2>Saan napunta ang oras</h2>
         <div class="rows" id="week-totals"></div>
       </div>
+      <div class="card">
+        <h2>Kasabay</h2>
+        <div id="week-tags"></div>
+      </div>
     </div>
   </section>
 </div>
@@ -216,6 +226,7 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
     <h3 id="sheet-title">Ayusin ang log</h3>
     <p class="empty" id="sheet-sub"></p>
     <div class="tiles" id="sheet-tiles"></div>
+    <div class="tagrow" id="sheet-tags"></div>
     <div class="chips">
       <button class="btn" id="sheet-delete">Delete</button>
       <button class="btn primary" id="sheet-close">Done</button>
@@ -248,6 +259,18 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
   const CAT = Object.fromEntries(CATS.map(c => [c.id, c]));
   const MIN = 60000, HOUR = 3600000, DAY = 86400000;
   const GAP_MIN = 15 * MIN;
+
+  // Kasabay tags: things happening alongside the main activity. They never add time to totals.
+  const TAGS = [
+    { id: "kain", name: "Kumakain",         hideFor: "kain" },
+    { id: "fin",  name: "Work standby", hideFor: "intern" }
+  ];
+  const TAG = Object.fromEntries(TAGS.map(t => [t.id, t]));
+  const WORK_UNTIL = new Date(2026, 10, 13, 23, 59).getTime();   // internship ends Nov 13
+  const inWorkHours = t => { const d = new Date(t), wd = d.getDay(), h = d.getHours(); return t <= WORK_UNTIL && wd >= 1 && wd <= 5 && h >= 9 && h < 18; };
+  const autoTags = (cat, t) => (cat !== "intern" && inWorkHours(t)) ? ["fin"] : [];
+  const cleanTags = (cat, tags) => (tags || []).filter(t => TAG[t] && TAG[t].hideFor !== cat);
+  const createdOf = s => s.c || (s.id && s.id.length > 5 ? parseInt(s.id.slice(0, -5), 36) : 0) || 0;
 
   // ---------- state ----------
   let current = null;            // { cat, start }
@@ -286,6 +309,7 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
   }
   function localLoad() {
     try { const raw = localStorage.getItem("oraslog"); if (raw) { const o = JSON.parse(raw); current = o.current || null; Object.assign(days, o.days || {}); } } catch (e) {}
+    Object.keys(days).forEach(k => { if (normalizeDay(k)) saveDay(k); });
   }
   function saveDay(key) {
     const sessions = (days[key] || []).slice().sort((a, b) => a.start - b.start);
@@ -295,7 +319,7 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
   }
   function saveCurrent() {
     if (mode !== "db") { localSave(); return Promise.resolve(); }
-    const body = current ? { active: true, cat: current.cat, start: current.start } : { active: false };
+    const body = current ? { active: true, cat: current.cat, start: current.start, tags: current.tags || [] } : { active: false };
     return enqueue("state/current", () => db.doc("state/current").set(body)).catch(onWriteError);
   }
   function onWriteError(e) {
@@ -305,64 +329,109 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
   }
 
   // ---------- core actions ----------
-  function addSession(cat, start, end) {
-    let ids = [];
+  // Remove [start, end) from every saved log: logs inside it go, logs crossing it get trimmed or split.
+  // The newest log always wins. Returns the day keys that changed.
+  function carve(start, end) {
+    const touched = new Set();
+    for (let d = midnight(start); d < end; d = nextMidnight(d)) {
+      const key = keyOf(d), list = days[key];
+      if (!list) continue;
+      const out = []; let changed = false;
+      list.forEach(s => {
+        if (s.end <= start || s.start >= end) { out.push(s); return; }
+        changed = true;
+        let keptFirst = false;
+        if (s.start < start && start - s.start >= MIN) { out.push(Object.assign({}, s, { end: start, c: createdOf(s) })); keptFirst = true; }
+        if (s.end > end && s.end - end >= MIN) out.push(Object.assign({}, s, { id: keptFirst ? uid() : s.id, c: createdOf(s), start: end }));
+      });
+      if (changed) { days[key] = out; touched.add(key); }
+    }
+    return touched;
+  }
+  // Clean up overlaps already saved (from before this fix, or from another device). Newest wins.
+  function normalizeDay(key) {
+    const list = days[key];
+    if (!list || list.length < 2) return false;
+    const byStart = list.slice().sort((a, b) => a.start - b.start);
+    let maxEnd = -Infinity, overlap = false;
+    byStart.forEach(s => { if (s.start < maxEnd) overlap = true; maxEnd = Math.max(maxEnd, s.end); });
+    if (!overlap) return false;
+    let out = [];
+    list.slice().sort((a, b) => createdOf(a) - createdOf(b)).forEach(s => {
+      const next = [];
+      out.forEach(r => {
+        if (r.end <= s.start || r.start >= s.end) { next.push(r); return; }
+        if (r.start < s.start && s.start - r.start >= MIN) next.push(Object.assign({}, r, { end: s.start, c: createdOf(r) }));
+        if (r.end > s.end && r.end - s.end >= MIN) next.push(Object.assign({}, r, { id: uid(), c: createdOf(r), start: s.end }));
+      });
+      next.push(s); out = next;
+    });
+    days[key] = out;
+    return true;
+  }
+  function addSession(cat, start, end, tags) {
+    const touched = carve(start, end);
+    const ids = [], created = Date.now(), t = cleanTags(cat, tags);
     let s = start;
     while (s < end) {
       const e = Math.min(end, nextMidnight(s));
       if (e - s >= MIN) {
-        const key = keyOf(s);
-        const id = uid();
-        (days[key] = days[key] || []).push({ id, cat, start: s, end: e });
-        ids.push({ key, id });
-        saveDay(key);
+        const key = keyOf(s), id = uid();
+        const rec = { id, c: created, cat, start: s, end: e };
+        if (t.length) rec.tags = t.slice();
+        (days[key] = days[key] || []).push(rec);
+        ids.push({ key, id }); touched.add(key);
       }
       s = e;
     }
+    touched.forEach(k => saveDay(k));
     return ids;
   }
   function switchTo(cat) {
     const now = Date.now();
-    lastClosed = null;
-    if (current) {
-      const closed = addSession(current.cat, current.start, now);
-      lastClosed = closed.length ? closed[closed.length - 1] : null;
-    }
+    if (current) addSession(current.cat, current.start, now, current.tags);
     if (current && current.cat === cat) {
       current = null;
       saveCurrent(); render();
       showToast("Itinigil ang " + CAT[cat].name + ".", []);
       return;
     }
-    current = { cat, start: now };
+    const tags = autoTags(cat, now);
+    current = { cat, start: now, tags };
     toastTap = now;
     saveCurrent(); render();
-    showToast("Nagsimula ang " + CAT[cat].name + " ngayon. Kanina pa ba?", [15, 30, 60]);
+    showToast("Nagsimula ang " + CAT[cat].name + " ngayon." + (tags.length ? " Naka-tag na Work standby." : "") + " Kanina pa ba?", [15, 30, 60]);
   }
   function stopNow() {
     if (!current) return;
-    addSession(current.cat, current.start, Date.now());
+    addSession(current.cat, current.start, Date.now(), current.tags);
     const name = CAT[current.cat].name;
-    current = null; lastClosed = null;
+    current = null;
     saveCurrent(); render();
     showToast("Itinigil ang " + name + ".", []);
   }
   function backdate(mins) {
     if (!current) return;
-    let newStart = toastTap - mins * MIN;
-    if (lastClosed) {
-      const list = days[lastClosed.key] || [];
-      const prev = list.find(x => x.id === lastClosed.id);
-      if (prev) {
-        newStart = Math.max(newStart, prev.start + MIN);
-        prev.end = newStart;
-        saveDay(lastClosed.key);
-      }
-    }
+    const newStart = toastTap - mins * MIN;
+    carve(newStart, Date.now()).forEach(k => saveDay(k));
     current.start = newStart;
     saveCurrent(); render();
     showToast(CAT[current.cat].name + ", simula " + fmtTime(newStart) + ".", []);
   }
+  function tagButtons(el, cat, tags, onToggle) {
+    el.innerHTML = "";
+    const lbl = document.createElement("span"); lbl.className = "lbl"; lbl.textContent = "Kasabay:";
+    el.appendChild(lbl);
+    TAGS.filter(t => t.hideFor !== cat).forEach(t => {
+      const on = (tags || []).includes(t.id);
+      const b = document.createElement("button");
+      b.className = "btn tag"; b.textContent = t.name;
+      b.setAttribute("aria-pressed", on ? "true" : "false");
+      b.addEventListener("click", () => onToggle(t.id, !on));
+      el.appendChild(b);
+    });
+  }
+  const toggled = (tags, id, on) => on ? Array.from(new Set([...(tags || []), id])) : (tags || []).filter(x => x !== id);
 
   // ---------- toast ----------
   function showToast(text, mins) {
@@ -430,7 +499,8 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
       cur = Math.max(cur, x.end);
     });
   }
-  function totalsRows(el, t, denom) {
+  function totalsRows(el, t, denom, suffix) {
+    suffix = suffix || "% ng naka-log";
     el.innerHTML = "";
     const entries = Object.entries(t).sort((a, b) => b[1] - a[1]);
     if (!entries.length) { const p = document.createElement("p"); p.className = "empty"; p.textContent = "Wala pang naka-log."; el.appendChild(p); return; }
@@ -441,7 +511,7 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
       const n = document.createElement("div");
       const nn = document.createElement("div"); nn.className = "n"; nn.textContent = c.name;
       n.appendChild(nn);
-      if (denom) { const s = document.createElement("div"); s.className = "s"; s.textContent = Math.round(ms / denom * 100) + "% ng naka-log"; n.appendChild(s); }
+      if (denom) { const s = document.createElement("div"); s.className = "s"; s.textContent = Math.round(ms / denom * 100) + suffix; n.appendChild(s); }
       const v = document.createElement("div"); v.className = "v"; v.textContent = fmtDur(ms);
       r.append(dot, n, v); el.appendChild(r);
     });
@@ -458,7 +528,10 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
       $("live-cat").textContent = c.name;
       $("live-timer").textContent = fmtClock(now - current.start);
       $("stop-btn").hidden = false;
+      $("live-tags").hidden = false;
+      tagButtons($("live-tags"), current.cat, current.tags, (id, on) => { current.tags = toggled(current.tags, id, on); saveCurrent(); render(); });
     } else {
+      $("live-tags").hidden = true;
       $("live-swatch").style.background = "var(--line)";
       $("live-label").textContent = "Walang naka-log ngayon";
       $("live-cat").textContent = "Tap kung ano ginagawa mo";
@@ -482,7 +555,8 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
       const dot = document.createElement("span"); dot.className = "dot"; dot.style.background = c.c;
       const n = document.createElement("div");
       const nn = document.createElement("div"); nn.className = "n"; nn.textContent = c.name + (x.live ? " · ngayon" : "");
-      const ss = document.createElement("div"); ss.className = "s"; ss.textContent = fmtTime(x.start) + " – " + (x.live ? "ngayon" : fmtTime(x.end));
+      const ss = document.createElement("div"); ss.className = "s"; const xt = cleanTags(x.cat, x.live ? current.tags : x.tags).map(t => TAG[t].name);
+      ss.textContent = fmtTime(x.start) + " – " + (x.live ? "ngayon" : fmtTime(x.end)) + (xt.length ? " · " + xt.join(", ") : "");
       n.append(nn, ss);
       const v = document.createElement("div"); v.className = "v"; v.textContent = fmtDur(x.end - x.start);
       r.append(dot, n, v);
@@ -510,7 +584,7 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
     $("gap-time").textContent = fmtTime(g.start) + " – " + fmtTime(g.end);
     $("gap-sub").textContent = fmtDur(g.end - g.start) + ". Ano ginawa mo dito?";
     const gt = $("gap-tiles"); gt.innerHTML = "";
-    CATS.forEach(c => gt.appendChild(tileButton(c, () => { addSession(c.id, g.start, g.end); render(); showToast(fmtDur(g.end - g.start) + " na " + c.name + ", naka-log.", []); }, false)));
+    CATS.forEach(c => gt.appendChild(tileButton(c, () => { addSession(c.id, g.start, g.end, autoTags(c.id, g.start)); render(); showToast(fmtDur(g.end - g.start) + " na " + c.name + ", naka-log.", []); }, false)));
     $("gap-skip").onclick = () => { skipped.add(key + ":" + g.start); renderGaps(); };
   }
   function renderWeek() {
@@ -529,6 +603,44 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
       wrap.append(d, bar, h);
     }
     totalsRows($("week-totals"), all, allMs);
+
+    // Kasabay summary
+    let finActive = 0, finStandby = 0, kainMs = 0, kainN = 0;
+    const standbyBy = {};
+    for (let i = 6; i >= 0; i--) {
+      sessionsFor(keyOf(now - i * DAY), true).forEach(x => {
+        const ms = x.end - x.start;
+        const tg = cleanTags(x.cat, x.live ? current.tags : x.tags);
+        if (x.cat === "intern") finActive += ms;
+        if (tg.includes("fin")) { finStandby += ms; standbyBy[x.cat] = (standbyBy[x.cat] || 0) + ms; }
+        if (tg.includes("kain")) { kainMs += ms; kainN++; }
+      });
+    }
+    const wt = $("week-tags"); wt.innerHTML = "";
+    const row = (color, name, sub, val) => {
+      const r = document.createElement("div"); r.className = "row";
+      const dot = document.createElement("span"); dot.className = "dot"; dot.style.background = color;
+      const n = document.createElement("div");
+      const nn = document.createElement("div"); nn.className = "n"; nn.textContent = name; n.appendChild(nn);
+      if (sub) { const s = document.createElement("div"); s.className = "s"; s.textContent = sub; n.appendChild(s); }
+      const v = document.createElement("div"); v.className = "v"; v.textContent = val;
+      r.append(dot, n, v); return r;
+    };
+    if (!finActive && !finStandby && !kainN) {
+      const p = document.createElement("p"); p.className = "empty";
+      p.textContent = "Wala pang naka-tag. Sa oras ng internship (Lun–Biy, 9–6), kusang nata-tag na standby ang ibang ginagawa mo.";
+      wt.appendChild(p); return;
+    }
+    const top = document.createElement("div"); top.className = "rows"; top.style.marginTop = "0";
+    top.appendChild(row(CAT.intern.c, "Oras sa Internship", fmtDur(finActive) + " active · " + fmtDur(finStandby) + " standby", fmtDur(finActive + finStandby)));
+    if (kainN) top.appendChild(row(CAT.kain.c, "Kumakain habang may ginagawa", kainN + (kainN === 1 ? " beses" : " beses"), fmtDur(kainMs)));
+    wt.appendChild(top);
+    if (finStandby) {
+      const h = document.createElement("p"); h.className = "sub-h"; h.textContent = "Ginawa mo habang standby";
+      const rows = document.createElement("div"); rows.className = "rows";
+      wt.append(h, rows);
+      totalsRows(rows, standbyBy, finStandby, "% ng standby");
+    }
   }
 
   // ---------- edit sheet ----------
@@ -537,7 +649,9 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
     editing = { key, id };
     $("sheet-sub").textContent = fmtTime(x.start) + " – " + fmtTime(x.end) + " · " + fmtDur(x.end - x.start) + ". Palitan ang category:";
     const st = $("sheet-tiles"); st.innerHTML = "";
-    CATS.forEach(c => st.appendChild(tileButton(c, () => { x.cat = c.id; saveDay(key); closeSheet(); render(); }, x.cat === c.id)));
+    CATS.forEach(c => st.appendChild(tileButton(c, () => { x.cat = c.id; x.tags = cleanTags(c.id, x.tags); saveDay(key); closeSheet(); render(); }, x.cat === c.id)));
+    const drawTags = () => tagButtons($("sheet-tags"), x.cat, x.tags, (id, on) => { x.tags = toggled(x.tags, id, on); saveDay(key); drawTags(); render(); });
+    drawTags();
     $("sheet-wrap").classList.add("show");
   }
   function closeSheet() { $("sheet-wrap").classList.remove("show"); editing = null; }
@@ -582,12 +696,13 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
     db.collection("days").where("date", ">=", since).onSnapshot(snap => {
       snap.docs.forEach(d => { const b = d.data(); if (b && Array.isArray(b.sessions)) days[d.id] = b.sessions.slice(); });
       snap.docChanges().forEach(ch => { if (ch.type === "removed") delete days[ch.doc.id]; });
+      if (!snap.metadata.fromCache) snap.docChanges().forEach(ch => { if (ch.type !== "removed" && normalizeDay(ch.doc.id)) saveDay(ch.doc.id); });
       if (!snap.metadata.fromCache) { loaded = true; clearTimeout(t); s.className = "sync"; s.textContent = "Naka-sync"; }
       render();
     }, e => { clearTimeout(t); s.className = "sync warn"; s.textContent = "Nawala ang koneksyon sa data. I-refresh mamaya."; });
     db.doc("state/current").onSnapshot(snap => {
       const b = snap.exists ? snap.data() : null;
-      current = b && b.active ? { cat: b.cat, start: b.start } : null;
+      current = b && b.active ? { cat: b.cat, start: b.start, tags: b.tags || [] } : null;
       render();
     }, () => {});
   }).catch(() => goLocal("Sa browser na 'to lang naka-save. Buksan sa claude.ai para ma-sync."));
