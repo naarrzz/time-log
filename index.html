@@ -11,6 +11,7 @@
 <meta name="apple-mobile-web-app-title" content="Time Log">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#121513">
+<script>try { const th = localStorage.getItem("timelog-theme"); if (th && th !== "auto") document.documentElement.dataset.theme = th; } catch (e) {}</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Figtree:wght@400;500;600&display=swap">
 <style>
@@ -23,23 +24,30 @@
   --line: #E0E3DD;
   --accent: #1F6B57;
   --accent-ink: #FFFFFF;
+  --warn: #B4542A;
   --display: "Bricolage Grotesque", "Avenir Next", system-ui, sans-serif;
   --body: "Figtree", -apple-system, "Segoe UI", sans-serif;
   color-scheme: light;
 }
+/* Auto follows the device. Dim is a softer gray; Dark is deeper with more contrast. */
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --bg: #121513; --surface: #1B1F1C; --ink: #ECEFEA; --ink-soft: #A2AAA3;
-    --line: #2C322E; --accent: #4FB394; --accent-ink: #0E1210; color-scheme: dark;
+  :root:not([data-theme]) {
+    --bg: #0B0D0C; --surface: #161917; --ink: #F4F6F3; --ink-soft: #A8B0A9;
+    --line: #272C28; --accent: #4FB394; --accent-ink: #0B0D0C; --warn: #F0916A; color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
-  --bg: #121513; --surface: #1B1F1C; --ink: #ECEFEA; --ink-soft: #A2AAA3;
-  --line: #2C322E; --accent: #4FB394; --accent-ink: #0E1210; color-scheme: dark;
+  --bg: #0B0D0C; --surface: #161917; --ink: #F4F6F3; --ink-soft: #A8B0A9;
+  --line: #272C28; --accent: #4FB394; --accent-ink: #0B0D0C; --warn: #F0916A; color-scheme: dark;
+}
+:root[data-theme="dim"] {
+  --bg: #23272B; --surface: #2C3136; --ink: #E8EBE8; --ink-soft: #B4BBB5;
+  --line: #3D4349; --accent: #62C2A4; --accent-ink: #14181A; --warn: #F7A98A; color-scheme: dark;
 }
 * { box-sizing: border-box; }
 html, body { height: 100%; margin: 0; }
 body {
+  transition: background-color .2s ease, color .2s ease;
   background: var(--bg); color: var(--ink); font-family: var(--body);
   font-size: 15px; -webkit-font-smoothing: antialiased; -webkit-tap-highlight-color: transparent;
 }
@@ -48,7 +56,7 @@ header.top { display: flex; justify-content: space-between; align-items: baselin
 header.top h1 { font-family: var(--display); font-size: 22px; margin: 0; letter-spacing: -0.01em; }
 header.top .date { color: var(--ink-soft); font-size: 13px; }
 .sync { font-size: 12px; color: var(--ink-soft); }
-.sync.warn { color: #B4542A; }
+.sync.warn { color: var(--warn); }
 
 /* Live card */
 .live {
@@ -300,6 +308,15 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
       <div class="card">
         <h2>Kasabay</h2>
         <div id="week-tags"></div>
+      </div>
+      <div class="card">
+        <h2>Itsura</h2>
+        <div class="seg" id="theme-seg" role="group" aria-label="Theme">
+          <button data-theme-pick="auto">Auto</button>
+          <button data-theme-pick="light">Light</button>
+          <button data-theme-pick="dim">Dim</button>
+          <button data-theme-pick="dark">Dark</button>
+        </div>
       </div>
       <div class="card">
         <h2>Data mo</h2>
@@ -1367,6 +1384,31 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
       render();
     }, onListenError);
   }
+
+  // ---------- theme (saved per device) ----------
+  function applyTheme(choice) {
+    if (choice === "auto") delete document.documentElement.dataset.theme;
+    else document.documentElement.dataset.theme = choice;
+    document.querySelectorAll("[data-theme-pick]").forEach(b => {
+      const on = b.dataset.themePick === choice;
+      b.classList.toggle("on", on);
+      b.setAttribute("aria-pressed", on ? "true" : "false");
+    });
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.content = getComputedStyle(document.documentElement).getPropertyValue("--bg").trim();
+  }
+  let savedTheme = "auto";
+  try { savedTheme = localStorage.getItem("timelog-theme") || "auto"; } catch (e) {}
+  applyTheme(savedTheme);
+  document.querySelectorAll("[data-theme-pick]").forEach(b => b.addEventListener("click", () => {
+    const choice = b.dataset.themePick;
+    try { localStorage.setItem("timelog-theme", choice); } catch (e) {}
+    applyTheme(choice);
+  }));
+  // Auto follows the device live, so the status bar color has to follow too.
+  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
+    if (!document.documentElement.dataset.theme) applyTheme("auto");
+  });
 
   // ---------- login ----------
   const LOGIN_ERRORS = {
