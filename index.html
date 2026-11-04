@@ -2,8 +2,15 @@
 <html lang="tl">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Time Log</title>
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" href="favicon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Time Log">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#121513">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Figtree:wght@400;500;600&display=swap">
 <style>
@@ -36,7 +43,7 @@ body {
   background: var(--bg); color: var(--ink); font-family: var(--body);
   font-size: 15px; -webkit-font-smoothing: antialiased; -webkit-tap-highlight-color: transparent;
 }
-.app { max-width: 520px; margin: 0 auto; padding: 16px 16px 96px; display: flex; flex-direction: column; gap: 18px; }
+.app { max-width: 520px; margin: 0 auto; padding: calc(16px + env(safe-area-inset-top)) 16px 96px; display: flex; flex-direction: column; gap: 18px; }
 header.top { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
 header.top h1 { font-family: var(--display); font-size: 22px; margin: 0; letter-spacing: -0.01em; }
 header.top .date { color: var(--ink-soft); font-size: 13px; }
