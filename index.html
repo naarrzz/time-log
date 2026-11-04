@@ -117,6 +117,7 @@ header.top .date { color: var(--ink-soft); font-size: 13px; }
 .toast.show { display: flex; }
 .toast p { margin: 0; font-size: 14px; }
 .toast .btn { background: transparent; color: var(--bg); border-color: color-mix(in srgb, var(--bg) 35%, transparent); }
+.toast-time { font: 16px var(--body); color: var(--ink); background: var(--bg); border: 0; border-radius: 10px; padding: 6px 10px; min-height: 36px; }
 .sheet-wrap { position: fixed; inset: 0; background: rgba(0,0,0,.35); display: none; align-items: flex-end; justify-content: center; z-index: 30; }
 .sheet-wrap.show { display: flex; }
 .sheet { background: var(--bg); width: min(520px, 100%); border-radius: 22px 22px 0 0; padding: 18px 16px 28px; display: flex; flex-direction: column; gap: 14px; max-height: 90%; overflow: auto; }
@@ -295,9 +296,9 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
     { id: "biyahe",   name: "Biyahe",        c: "#7C8A93" },
     { id: "side",     name: "Side projects", c: "#3AA0B8" },
     { id: "org",      name: "Org",           c: "#9C6B3F" },
-    { id: "kain",     name: "Kain/Pahinga",  c: "#8DB255" },
+    { id: "kain",     name: "Kain",          c: "#8DB255" },
     { id: "scroll",   name: "Scroll",  c: "#D14B4B" },
-    { id: "tulog",    name: "Tulog",         c: "#3E4A7A" }
+    { id: "tulog",    name: "Tulog/Pahinga", c: "#3E4A7A" }
   ];
   const CAT = Object.fromEntries(CATS.map(c => [c.id, c]));
   const MIN = 60000, HOUR = 3600000, DAY = 86400000;
@@ -534,7 +535,7 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
     current.kas = (current.kas || []).concat([{ cat, start: now }]);
     kasTap = now;
     saveCurrent(); render();
-    showToast("Kasabay ng " + CAT[current.cat].name + ": " + CAT[cat].name + ". Kanina pa ba?", [15, 30, 60], m => backdateKas(cat, m));
+    showToast("Kasabay ng " + CAT[current.cat].name + ": " + CAT[cat].name + ". Kanina pa ba?", [15, 30, 60], m => backdateKas(cat, m), now);
   }
   function backdateKas(cat, mins) {
     const k = current && (current.kas || []).find(x => x.cat === cat);
@@ -604,15 +605,45 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
   }
 
   // ---------- toast ----------
-  function showToast(text, mins, onPick) {
+  const hideToast = () => { clearTimeout(toastTimer); $("toast").classList.remove("show"); };
+  // Ask for an exact start time. tap is the moment "now" meant when the tile was tapped.
+  function askStartTime(onPick, tap) {
+    clearTimeout(toastTimer);   // stay open while they pick
+    $("toast-text").textContent = "Anong oras nagsimula?";
+    const chips = $("toast-chips"); chips.innerHTML = "";
+    const input = document.createElement("input");
+    input.type = "time"; input.className = "toast-time"; input.setAttribute("aria-label", "Oras ng simula");
+    const t0 = new Date(tap); input.value = pad(t0.getHours()) + ":" + pad(t0.getMinutes());
+    const ok = document.createElement("button"); ok.className = "btn"; ok.textContent = "I-set";
+    const no = document.createElement("button"); no.className = "btn"; no.textContent = "Huwag na";
+    no.addEventListener("click", hideToast);
+    ok.addEventListener("click", () => {
+      const [h, m] = input.value.split(":").map(Number);
+      if (isNaN(h) || isNaN(m)) return;
+      let t = new Date(tap).setHours(h, m, 0, 0);
+      if (t > tap) t -= DAY;                     // 11:50 PM picked at 12:10 AM means last night
+      if (tap - t > 12 * HOUR) { $("toast-text").textContent = "Mamaya pa ang oras na 'yan. Pumili ulit."; return; }
+      if (!onPick) {                             // the main activity replaces whatever was logged in that stretch
+        const logged = sessionsFor(keyOf(t), false).concat(keyOf(t) === keyOf(tap) ? [] : sessionsFor(keyOf(tap), false))
+          .reduce((a, s) => a + overlapMs(s, { start: t, end: tap }), 0);
+        if (logged >= MIN && !confirm("Mapapalitan nito ang " + fmtDur(logged) + " na naka-log na. Tuloy?")) return;
+      }
+      (onPick || backdate)((tap - t) / MIN);
+    });
+    chips.append(input, ok, no);
+  }
+  function showToast(text, mins, onPick, tap) {
     $("toast-text").textContent = text;
     const chips = $("toast-chips"); chips.innerHTML = "";
-    mins.forEach(m => {
+    const add = (label, fn) => {
       const b = document.createElement("button");
-      b.className = "btn"; b.textContent = m === 60 ? "1 oras na" : m + " min na";
-      b.addEventListener("click", () => (onPick || backdate)(m));
+      b.className = "btn"; b.textContent = label;
+      b.addEventListener("click", fn);
       chips.appendChild(b);
-    });
+    };
+    if (mins.length) add("Hindi, ngayon lang", hideToast);
+    mins.forEach(m => add(m === 60 ? "1 oras na" : m + " min na", () => (onPick || backdate)(m)));
+    if (mins.length) add("Ibang oras", () => askStartTime(onPick, tap || toastTap));
     chips.hidden = !mins.length;
     $("toast").classList.add("show");
     clearTimeout(toastTimer);
@@ -649,7 +680,7 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
     });
     return total;
   }
-  // "Scroll 25m, Kain/Pahinga 10m" for one log.
+  // "Scroll 25m, Kain 10m" for one log.
   function kasSummary(key, x) {
     const t = {};
     kasFor(key).forEach(k => { const ms = overlapMs(k, x); if (ms > 0) t[k.cat] = (t[k.cat] || 0) + ms; });
