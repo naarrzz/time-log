@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="tl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Oras Log</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Figtree:wght@400;500;600&display=swap">
+<style>
+/* Layout: one-thumb phone app. Live card on top, tap tiles below, tabs at the bottom. */
+:root {
+  --bg: #F4F5F2;
+  --surface: #FFFFFF;
+  --ink: #1D211E;
+  --ink-soft: #5E655F;
+  --line: #E0E3DD;
+  --accent: #1F6B57;
+  --accent-ink: #FFFFFF;
+  --display: "Bricolage Grotesque", "Avenir Next", system-ui, sans-serif;
+  --body: "Figtree", -apple-system, "Segoe UI", sans-serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #121513; --surface: #1B1F1C; --ink: #ECEFEA; --ink-soft: #A2AAA3;
+    --line: #2C322E; --accent: #4FB394; --accent-ink: #0E1210; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #121513; --surface: #1B1F1C; --ink: #ECEFEA; --ink-soft: #A2AAA3;
+  --line: #2C322E; --accent: #4FB394; --accent-ink: #0E1210; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  background: var(--bg); color: var(--ink); font-family: var(--body);
+  font-size: 15px; -webkit-font-smoothing: antialiased; -webkit-tap-highlight-color: transparent;
+}
+.app { max-width: 520px; margin: 0 auto; padding: 16px 16px 96px; display: flex; flex-direction: column; gap: 18px; }
+header.top { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+header.top h1 { font-family: var(--display); font-size: 22px; margin: 0; letter-spacing: -0.01em; }
+header.top .date { color: var(--ink-soft); font-size: 13px; }
+.sync { font-size: 12px; color: var(--ink-soft); }
+.sync.warn { color: #B4542A; }
+
+/* Live card */
+.live {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 18px;
+  padding: 16px 18px; display: flex; align-items: center; gap: 14px; min-height: 84px;
+}
+.live .swatch { width: 14px; align-self: stretch; border-radius: 7px; background: var(--line); flex: none; }
+.live .what { flex: 1; min-width: 0; }
+.live .label { font-size: 13px; color: var(--ink-soft); margin: 0 0 2px; }
+.live .cat { font-family: var(--display); font-size: 24px; font-weight: 700; margin: 0; text-wrap: balance; }
+.live .timer { font-family: var(--display); font-size: 28px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.live .stop { margin-top: 6px; }
+
+/* Tiles */
+.ask { font-family: var(--display); font-size: 17px; font-weight: 600; margin: 0 0 10px; }
+.tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.tile {
+  appearance: none; border: 1px solid var(--line); background: var(--surface); color: var(--ink);
+  border-radius: 14px; padding: 14px 10px 12px; min-height: 76px; text-align: left; cursor: pointer;
+  display: flex; flex-direction: column; justify-content: space-between; gap: 8px;
+  font: 600 13.5px/1.2 var(--body); position: relative; transition: transform .08s ease;
+}
+.tile:active { transform: scale(.97); }
+.tile .dot { width: 12px; height: 12px; border-radius: 50%; }
+.tile .t { overflow-wrap: break-word; hyphens: none; }
+.tile.on { border-color: var(--c); box-shadow: inset 0 0 0 2px var(--c); }
+.tile:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+/* Buttons */
+.btn { appearance: none; border: 1px solid var(--line); background: var(--surface); color: var(--ink);
+  border-radius: 999px; padding: 8px 14px; font: 600 13px var(--body); cursor: pointer; }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* Timeline */
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 16px 18px; }
+.card h2 { font-family: var(--display); font-size: 17px; margin: 0 0 12px; }
+.bar { display: flex; height: 22px; border-radius: 6px; overflow: hidden; background: var(--line); }
+.bar span { display: block; height: 100%; }
+.axis { display: flex; justify-content: space-between; font-size: 11px; color: var(--ink-soft); margin-top: 6px; font-variant-numeric: tabular-nums; }
+.rows { display: flex; flex-direction: column; margin-top: 12px; }
+.row { display: grid; grid-template-columns: 12px 1fr auto; gap: 10px; align-items: center; padding: 9px 0; border-top: 1px solid var(--line); }
+.row:first-child { border-top: none; }
+.row .dot { width: 10px; height: 10px; border-radius: 50%; }
+.row .n { font-weight: 600; }
+.row .s { color: var(--ink-soft); font-size: 13px; }
+.row .v { font-variant-numeric: tabular-nums; font-weight: 600; }
+.row button.link { all: unset; cursor: pointer; display: contents; }
+.empty { color: var(--ink-soft); font-size: 14px; margin: 0; }
+
+/* Gap quiz */
+.gap-q { font-family: var(--display); font-size: 26px; font-weight: 700; margin: 4px 0 2px; font-variant-numeric: tabular-nums; }
+.gap-sub { color: var(--ink-soft); margin: 0 0 14px; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; padding: 3px; background: var(--surface); }
+.seg button { appearance: none; border: 0; background: transparent; color: var(--ink-soft); font: 600 13px var(--body); padding: 6px 14px; border-radius: 999px; cursor: pointer; }
+.seg button.on { background: var(--ink); color: var(--bg); }
+
+/* Week */
+.week { display: grid; grid-template-columns: 34px 1fr 44px; gap: 8px 10px; align-items: center; font-size: 13px; }
+.week .d { color: var(--ink-soft); }
+.week .h { text-align: right; font-variant-numeric: tabular-nums; color: var(--ink-soft); }
+
+/* Toast + sheet */
+.toast { position: fixed; left: 50%; bottom: 84px; transform: translateX(-50%); width: min(488px, calc(100% - 32px));
+  background: var(--ink); color: var(--bg); border-radius: 16px; padding: 12px 14px; display: none; gap: 10px; flex-direction: column; z-index: 20; }
+.toast.show { display: flex; }
+.toast p { margin: 0; font-size: 14px; }
+.toast .btn { background: transparent; color: var(--bg); border-color: color-mix(in srgb, var(--bg) 35%, transparent); }
+.sheet-wrap { position: fixed; inset: 0; background: rgba(0,0,0,.35); display: none; align-items: flex-end; justify-content: center; z-index: 30; }
+.sheet-wrap.show { display: flex; }
+.sheet { background: var(--bg); width: min(520px, 100%); border-radius: 22px 22px 0 0; padding: 18px 16px 28px; display: flex; flex-direction: column; gap: 14px; max-height: 90%; overflow: auto; }
+.sheet h3 { font-family: var(--display); margin: 0; font-size: 19px; }
+
+/* Tabs */
+nav.tabs { position: fixed; left: 0; right: 0; bottom: 0; background: var(--surface); border-top: 1px solid var(--line);
+  display: flex; justify-content: center; padding: 8px 8px calc(8px + env(safe-area-inset-bottom)); z-index: 10; }
+nav.tabs .in { display: flex; width: min(520px, 100%); }
+nav.tabs button { flex: 1; appearance: none; border: 0; background: transparent; color: var(--ink-soft);
+  font: 600 13px var(--body); padding: 10px 4px; border-radius: 12px; cursor: pointer; position: relative; }
+nav.tabs button.on { color: var(--ink); background: var(--bg); }
+nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin-left: 4px; border-radius: 9px; background: #B4542A; color: #fff; font-size: 11px; line-height: 18px; }
+[hidden] { display: none !important; }
+@media (prefers-reduced-motion: reduce) { .tile { transition: none; } }
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <h1>Oras Log</h1>
+    <div>
+      <span class="date" id="today-label"></span>
+    </div>
+  </header>
+  <p class="sync" id="sync">Kumokonekta…</p>
+
+  <!-- NGAYON -->
+  <section id="view-now" class="view">
+    <div style="display:flex;flex-direction:column;gap:18px">
+      <div class="live" id="live">
+        <div class="swatch" id="live-swatch"></div>
+        <div class="what">
+          <p class="label" id="live-label">Walang naka-log ngayon</p>
+          <p class="cat" id="live-cat">Tap kung ano ginagawa mo</p>
+        </div>
+        <div style="text-align:right">
+          <div class="timer" id="live-timer"></div>
+          <button class="btn stop" id="stop-btn" hidden>Itigil</button>
+        </div>
+      </div>
+      <div>
+        <p class="ask">Ano ginagawa mo ngayon?</p>
+        <div class="tiles" id="tiles"></div>
+      </div>
+      <div class="card">
+        <h2>Ngayong araw</h2>
+        <div class="bar" id="today-bar"></div>
+        <div class="axis"><span>12 AM</span><span>6 AM</span><span>12 PM</span><span>6 PM</span><span>12 AM</span></div>
+        <div class="rows" id="today-totals"></div>
+      </div>
+      <div class="card">
+        <h2>Mga log ngayon</h2>
+        <div class="rows" id="today-list"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- PUNAN -->
+  <section id="view-gaps" class="view" hidden>
+    <div style="display:flex;flex-direction:column;gap:18px">
+      <div class="seg" role="tablist" aria-label="Araw">
+        <button id="gap-today" class="on">Ngayon</button>
+        <button id="gap-yday">Kahapon</button>
+      </div>
+      <div class="card" id="gap-card">
+        <p class="label" id="gap-count" style="color:var(--ink-soft);font-size:13px;margin:0"></p>
+        <p class="gap-q" id="gap-time"></p>
+        <p class="gap-sub" id="gap-sub">Ano ginawa mo dito?</p>
+        <div class="tiles" id="gap-tiles"></div>
+        <div class="chips" style="margin-top:12px">
+          <button class="btn" id="gap-skip">Laktawan</button>
+        </div>
+      </div>
+      <div class="card" id="gap-done" hidden>
+        <h2>Walang butas</h2>
+        <p class="empty" id="gap-done-text">Kumpleto ang log mo para sa araw na ito.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- LINGGO -->
+  <section id="view-week" class="view" hidden>
+    <div style="display:flex;flex-direction:column;gap:18px">
+      <div class="card">
+        <h2>Huling 7 araw</h2>
+        <div class="week" id="week-days"></div>
+      </div>
+      <div class="card">
+        <h2>Saan napunta ang oras</h2>
+        <div class="rows" id="week-totals"></div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite">
+  <p id="toast-text"></p>
+  <div class="chips" id="toast-chips"></div>
+</div>
+
+<div class="sheet-wrap" id="sheet-wrap">
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title">
+    <h3 id="sheet-title">Ayusin ang log</h3>
+    <p class="empty" id="sheet-sub"></p>
+    <div class="tiles" id="sheet-tiles"></div>
+    <div class="chips">
+      <button class="btn" id="sheet-delete">Burahin</button>
+      <button class="btn primary" id="sheet-close">Tapos</button>
+    </div>
+  </div>
+</div>
+
+<nav class="tabs"><div class="in">
+  <button id="tab-now" class="on">Ngayon</button>
+  <button id="tab-gaps">Punan<span class="badge" id="gap-badge" hidden></span></button>
+  <button id="tab-week">Linggo</button>
+</div></nav>
+
+<script>
+(() => {
+  const CATS = [
+    { id: "intern", name: "Internship",      c: "#2F6FBF" },
+    { id: "school",   name: "School",        c: "#7A4FC9" },
+    { id: "review",   name: "Review",   c: "#C2437A" },
+    { id: "coaching", name: "Coaching",      c: "#1F8A6B" },
+    { id: "content",  name: "Content",       c: "#E0682B" },
+    { id: "gym",      name: "Gym",           c: "#C9A227" },
+    { id: "biyahe",   name: "Biyahe",        c: "#7C8A93" },
+    { id: "side",     name: "Side projects", c: "#3AA0B8" },
+    { id: "org",      name: "Org",           c: "#9C6B3F" },
+    { id: "kain",     name: "Kain/Pahinga",  c: "#8DB255" },
+    { id: "scroll",   name: "Scroll",  c: "#D14B4B" },
+    { id: "tulog",    name: "Tulog",         c: "#3E4A7A" }
+  ];
+  const CAT = Object.fromEntries(CATS.map(c => [c.id, c]));
+  const MIN = 60000, HOUR = 3600000, DAY = 86400000;
+  const GAP_MIN = 15 * MIN;
+
+  // ---------- state ----------
+  let current = null;            // { cat, start }
+  const days = {};               // key -> sessions[]
+  let lastClosed = null;         // { key, id } of the session closed by the latest switch
+  let toastTap = 0, toastTimer = null;
+  let gapDay = "today", skipped = new Set();
+  let editing = null;            // { key, id }
+
+  // ---------- helpers ----------
+  const $ = id => document.getElementById(id);
+  const pad = n => String(n).padStart(2, "0");
+  const keyOf = t => { const d = new Date(t); return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()); };
+  const midnight = t => { const d = new Date(t); d.setHours(0, 0, 0, 0); return d.getTime(); };
+  const nextMidnight = t => { const d = new Date(midnight(t)); d.setDate(d.getDate() + 1); return d.getTime(); };
+  const fmtTime = t => { const d = new Date(t); let h = d.getHours(); const m = d.getMinutes(); const ap = h < 12 ? "AM" : "PM"; h = h % 12 || 12; return h + ":" + pad(m) + " " + ap; };
+  const fmtDur = ms => { const m = Math.round(ms / MIN); const h = Math.floor(m / 60); return h ? h + "h " + pad(m % 60) + "m" : m + "m"; };
+  const fmtHrs = ms => (ms / HOUR).toFixed(1) + "h";
+  const fmtClock = ms => { const s = Math.max(0, Math.floor(ms / 1000)); return Math.floor(s / 3600) + ":" + pad(Math.floor(s / 60) % 60) + ":" + pad(s % 60); };
+  const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+  const DOW = ["Lin", "Lun", "Mar", "Miy", "Huw", "Biy", "Sab"];
+  const MON = ["Ene", "Peb", "Mar", "Abr", "May", "Hun", "Hul", "Ago", "Set", "Okt", "Nob", "Dis"];
+  const dayLabel = key => { const [y, m, d] = key.split("-").map(Number); const dt = new Date(y, m - 1, d); return DOW[dt.getDay()] + ", " + MON[m - 1] + " " + d; };
+
+  // ---------- storage (db when available, this-browser fallback otherwise) ----------
+  let db = null, mode = "loading";
+  const queues = {};
+  function enqueue(path, fn) {
+    const prev = queues[path] || Promise.resolve();
+    const next = prev.then(fn, fn);
+    queues[path] = next.catch(() => {});
+    return next;
+  }
+  function localSave() {
+    try { localStorage.setItem("oraslog", JSON.stringify({ current, days })); } catch (e) {}
+  }
+  function localLoad() {
+    try { const raw = localStorage.getItem("oraslog"); if (raw) { const o = JSON.parse(raw); current = o.current || null; Object.assign(days, o.days || {}); } } catch (e) {}
+  }
+  function saveDay(key) {
+    const sessions = (days[key] || []).slice().sort((a, b) => a.start - b.start);
+    days[key] = sessions;
+    if (mode !== "db") { localSave(); return Promise.resolve(); }
+    return enqueue("days/" + key, () => db.doc("days/" + key).set({ date: key, sessions })).catch(onWriteError);
+  }
+  function saveCurrent() {
+    if (mode !== "db") { localSave(); return Promise.resolve(); }
+    const body = current ? { active: true, cat: current.cat, start: current.start } : { active: false };
+    return enqueue("state/current", () => db.doc("state/current").set(body)).catch(onWriteError);
+  }
+  function onWriteError(e) {
+    const s = $("sync");
+    s.className = "sync warn";
+    s.textContent = e && e.code === "quota_exceeded" ? "Puno na ang storage. Sabihin kay Claude para malinis ang lumang logs." : "Hindi na-save ang huling pagbabago. Subukan ulit mamaya.";
+  }
+
+  // ---------- core actions ----------
+  function addSession(cat, start, end) {
+    let ids = [];
+    let s = start;
+    while (s < end) {
+      const e = Math.min(end, nextMidnight(s));
+      if (e - s >= MIN) {
+        const key = keyOf(s);
+        const id = uid();
+        (days[key] = days[key] || []).push({ id, cat, start: s, end: e });
+        ids.push({ key, id });
+        saveDay(key);
+      }
+      s = e;
+    }
+    return ids;
+  }
+  function switchTo(cat) {
+    const now = Date.now();
+    lastClosed = null;
+    if (current) {
+      const closed = addSession(current.cat, current.start, now);
+      lastClosed = closed.length ? closed[closed.length - 1] : null;
+    }
+    if (current && current.cat === cat) {
+      current = null;
+      saveCurrent(); render();
+      showToast("Itinigil ang " + CAT[cat].name + ".", []);
+      return;
+    }
+    current = { cat, start: now };
+    toastTap = now;
+    saveCurrent(); render();
+    showToast("Nagsimula ang " + CAT[cat].name + " ngayon. Kanina pa ba?", [15, 30, 60]);
+  }
+  function stopNow() {
+    if (!current) return;
+    addSession(current.cat, current.start, Date.now());
+    const name = CAT[current.cat].name;
+    current = null; lastClosed = null;
+    saveCurrent(); render();
+    showToast("Itinigil ang " + name + ".", []);
+  }
+  function backdate(mins) {
+    if (!current) return;
+    let newStart = toastTap - mins * MIN;
+    if (lastClosed) {
+      const list = days[lastClosed.key] || [];
+      const prev = list.find(x => x.id === lastClosed.id);
+      if (prev) {
+        newStart = Math.max(newStart, prev.start + MIN);
+        prev.end = newStart;
+        saveDay(lastClosed.key);
+      }
+    }
+    current.start = newStart;
+    saveCurrent(); render();
+    showToast(CAT[current.cat].name + ", simula " + fmtTime(newStart) + ".", []);
+  }
+
+  // ---------- toast ----------
+  function showToast(text, mins) {
+    $("toast-text").textContent = text;
+    const chips = $("toast-chips"); chips.innerHTML = "";
+    mins.forEach(m => {
+      const b = document.createElement("button");
+      b.className = "btn"; b.textContent = m === 60 ? "1 oras na" : m + " min na";
+      b.addEventListener("click", () => backdate(m));
+      chips.appendChild(b);
+    });
+    chips.hidden = !mins.length;
+    $("toast").classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => $("toast").classList.remove("show"), mins.length ? 7000 : 2500);
+  }
+
+  // ---------- derived ----------
+  function sessionsFor(key, includeLive) {
+    const list = (days[key] || []).slice();
+    if (includeLive && current) {
+      const s0 = midnight(new Date(key.replace(/-/g, "/")).getTime());
+      const s = Math.max(current.start, s0), e = Math.min(Date.now(), s0 + DAY);
+      if (e > s) list.push({ id: "live", cat: current.cat, start: s, end: e, live: true });
+    }
+    return list.sort((a, b) => a.start - b.start);
+  }
+  function totals(list) {
+    const t = {};
+    list.forEach(x => { t[x.cat] = (t[x.cat] || 0) + (x.end - x.start); });
+    return t;
+  }
+  function gapsFor(key) {
+    const d0 = midnight(new Date(key.replace(/-/g, "/")).getTime());
+    const end = Math.min(Date.now(), d0 + DAY);
+    const occ = sessionsFor(key, true);
+    const gaps = []; let cur = d0;
+    occ.forEach(x => { if (x.start - cur >= GAP_MIN) gaps.push({ start: cur, end: x.start }); cur = Math.max(cur, x.end); });
+    if (end - cur >= GAP_MIN) gaps.push({ start: cur, end });
+    return gaps.filter(g => !skipped.has(key + ":" + g.start));
+  }
+
+  // ---------- render ----------
+  function tileButton(cat, onClick, isOn) {
+    const b = document.createElement("button");
+    b.className = "tile" + (isOn ? " on" : "");
+    b.style.setProperty("--c", cat.c);
+    const dot = document.createElement("span"); dot.className = "dot"; dot.style.background = cat.c;
+    const t = document.createElement("span"); t.className = "t"; t.textContent = cat.name;
+    b.append(dot, t);
+    b.setAttribute("aria-pressed", isOn ? "true" : "false");
+    b.addEventListener("click", onClick);
+    return b;
+  }
+  function renderBar(el, list, d0) {
+    el.innerHTML = "";
+    let cur = d0;
+    list.forEach(x => {
+      if (x.start > cur) { const g = document.createElement("span"); g.style.width = ((x.start - cur) / DAY * 100) + "%"; el.appendChild(g); }
+      const s = document.createElement("span");
+      s.style.width = ((x.end - Math.max(x.start, cur)) / DAY * 100) + "%";
+      s.style.background = CAT[x.cat] ? CAT[x.cat].c : "#999";
+      s.title = (CAT[x.cat] ? CAT[x.cat].name : x.cat) + " " + fmtTime(x.start) + "–" + fmtTime(x.end);
+      el.appendChild(s);
+      cur = Math.max(cur, x.end);
+    });
+  }
+  function totalsRows(el, t, denom) {
+    el.innerHTML = "";
+    const entries = Object.entries(t).sort((a, b) => b[1] - a[1]);
+    if (!entries.length) { const p = document.createElement("p"); p.className = "empty"; p.textContent = "Wala pang naka-log."; el.appendChild(p); return; }
+    entries.forEach(([id, ms]) => {
+      const c = CAT[id] || { name: id, c: "#999" };
+      const r = document.createElement("div"); r.className = "row";
+      const dot = document.createElement("span"); dot.className = "dot"; dot.style.background = c.c;
+      const n = document.createElement("div");
+      const nn = document.createElement("div"); nn.className = "n"; nn.textContent = c.name;
+      n.appendChild(nn);
+      if (denom) { const s = document.createElement("div"); s.className = "s"; s.textContent = Math.round(ms / denom * 100) + "% ng naka-log"; n.appendChild(s); }
+      const v = document.createElement("div"); v.className = "v"; v.textContent = fmtDur(ms);
+      r.append(dot, n, v); el.appendChild(r);
+    });
+  }
+  function render() {
+    const now = Date.now(), today = keyOf(now);
+    $("today-label").textContent = dayLabel(today);
+
+    // live card
+    if (current && CAT[current.cat]) {
+      const c = CAT[current.cat];
+      $("live-swatch").style.background = c.c;
+      $("live-label").textContent = "Ginagawa mo mula " + fmtTime(current.start);
+      $("live-cat").textContent = c.name;
+      $("live-timer").textContent = fmtClock(now - current.start);
+      $("stop-btn").hidden = false;
+    } else {
+      $("live-swatch").style.background = "var(--line)";
+      $("live-label").textContent = "Walang naka-log ngayon";
+      $("live-cat").textContent = "Tap kung ano ginagawa mo";
+      $("live-timer").textContent = "";
+      $("stop-btn").hidden = true;
+    }
+
+    // tiles
+    const tiles = $("tiles"); tiles.innerHTML = "";
+    CATS.forEach(c => tiles.appendChild(tileButton(c, () => switchTo(c.id), current && current.cat === c.id)));
+
+    // today
+    const list = sessionsFor(today, true);
+    renderBar($("today-bar"), list, midnight(now));
+    totalsRows($("today-totals"), totals(list));
+    const tl = $("today-list"); tl.innerHTML = "";
+    if (!list.length) { const p = document.createElement("p"); p.className = "empty"; p.textContent = "Mag-tap ng tile sa itaas para magsimula."; tl.appendChild(p); }
+    list.slice().reverse().forEach(x => {
+      const c = CAT[x.cat] || { name: x.cat, c: "#999" };
+      const r = document.createElement("div"); r.className = "row";
+      const dot = document.createElement("span"); dot.className = "dot"; dot.style.background = c.c;
+      const n = document.createElement("div");
+      const nn = document.createElement("div"); nn.className = "n"; nn.textContent = c.name + (x.live ? " · ngayon" : "");
+      const ss = document.createElement("div"); ss.className = "s"; ss.textContent = fmtTime(x.start) + " – " + (x.live ? "ngayon" : fmtTime(x.end));
+      n.append(nn, ss);
+      const v = document.createElement("div"); v.className = "v"; v.textContent = fmtDur(x.end - x.start);
+      r.append(dot, n, v);
+      if (!x.live) { r.style.cursor = "pointer"; r.tabIndex = 0; r.addEventListener("click", () => openSheet(today, x.id)); r.addEventListener("keydown", e => { if (e.key === "Enter") openSheet(today, x.id); }); }
+      tl.appendChild(r);
+    });
+
+    renderGaps();
+    renderWeek();
+  }
+  function renderGaps() {
+    const now = Date.now();
+    const key = gapDay === "today" ? keyOf(now) : keyOf(now - DAY);
+    const gaps = gapsFor(key);
+    const badgeN = gapsFor(keyOf(now)).length;
+    $("gap-badge").hidden = !badgeN; $("gap-badge").textContent = badgeN;
+    if (!gaps.length) {
+      $("gap-card").hidden = true; $("gap-done").hidden = false;
+      $("gap-done-text").textContent = "Kumpleto ang log mo para sa " + (gapDay === "today" ? "araw na ito" : "kahapon") + ".";
+      return;
+    }
+    $("gap-card").hidden = false; $("gap-done").hidden = true;
+    const g = gaps[0];
+    $("gap-count").textContent = gaps.length + " butas na hindi pa naka-log";
+    $("gap-time").textContent = fmtTime(g.start) + " – " + fmtTime(g.end);
+    $("gap-sub").textContent = fmtDur(g.end - g.start) + ". Ano ginawa mo dito?";
+    const gt = $("gap-tiles"); gt.innerHTML = "";
+    CATS.forEach(c => gt.appendChild(tileButton(c, () => { addSession(c.id, g.start, g.end); render(); showToast(fmtDur(g.end - g.start) + " na " + c.name + ", naka-log.", []); }, false)));
+    $("gap-skip").onclick = () => { skipped.add(key + ":" + g.start); renderGaps(); };
+  }
+  function renderWeek() {
+    const now = Date.now();
+    const wrap = $("week-days"); wrap.innerHTML = "";
+    const all = {}; let allMs = 0;
+    for (let i = 6; i >= 0; i--) {
+      const t = now - i * DAY, key = keyOf(t);
+      const list = sessionsFor(key, true);
+      const tracked = list.reduce((a, x) => a + (x.end - x.start), 0);
+      Object.entries(totals(list)).forEach(([k, v]) => { all[k] = (all[k] || 0) + v; allMs += v; });
+      const d = document.createElement("div"); d.className = "d"; d.textContent = dayLabel(key).split(",")[0];
+      const bar = document.createElement("div"); bar.className = "bar"; bar.style.height = "16px";
+      renderBar(bar, list, midnight(t));
+      const h = document.createElement("div"); h.className = "h"; h.textContent = fmtHrs(tracked);
+      wrap.append(d, bar, h);
+    }
+    totalsRows($("week-totals"), all, allMs);
+  }
+
+  // ---------- edit sheet ----------
+  function openSheet(key, id) {
+    const x = (days[key] || []).find(s => s.id === id); if (!x) return;
+    editing = { key, id };
+    $("sheet-sub").textContent = fmtTime(x.start) + " – " + fmtTime(x.end) + " · " + fmtDur(x.end - x.start) + ". Palitan ang kategorya:";
+    const st = $("sheet-tiles"); st.innerHTML = "";
+    CATS.forEach(c => st.appendChild(tileButton(c, () => { x.cat = c.id; saveDay(key); closeSheet(); render(); }, x.cat === c.id)));
+    $("sheet-wrap").classList.add("show");
+  }
+  function closeSheet() { $("sheet-wrap").classList.remove("show"); editing = null; }
+  $("sheet-close").addEventListener("click", closeSheet);
+  $("sheet-wrap").addEventListener("click", e => { if (e.target.id === "sheet-wrap") closeSheet(); });
+  $("sheet-delete").addEventListener("click", () => {
+    if (!editing) return;
+    days[editing.key] = (days[editing.key] || []).filter(s => s.id !== editing.id);
+    saveDay(editing.key); closeSheet(); render();
+  });
+  $("stop-btn").addEventListener("click", stopNow);
+
+  // ---------- tabs ----------
+  const tabs = { now: "view-now", gaps: "view-gaps", week: "view-week" };
+  Object.keys(tabs).forEach(k => $("tab-" + k).addEventListener("click", () => {
+    Object.keys(tabs).forEach(j => { $(tabs[j]).hidden = j !== k; $("tab-" + j).classList.toggle("on", j === k); });
+    window.scrollTo(0, 0);
+  }));
+  $("gap-today").addEventListener("click", () => { gapDay = "today"; $("gap-today").classList.add("on"); $("gap-yday").classList.remove("on"); renderGaps(); });
+  $("gap-yday").addEventListener("click", () => { gapDay = "yday"; $("gap-yday").classList.add("on"); $("gap-today").classList.remove("on"); renderGaps(); });
+
+  // ---------- boot ----------
+  render();
+  setInterval(() => {
+    if (current) $("live-timer").textContent = fmtClock(Date.now() - current.start);
+  }, 1000);
+  setInterval(render, 60000);
+
+  function goLocal(reason) {
+    if (mode === "db") return;
+    mode = "local"; localLoad(); render();
+    const s = $("sync"); s.className = "sync warn"; s.textContent = reason;
+  }
+  const use = window.claude && window.claude.use ? window.claude.use("db") : Promise.resolve(null);
+  use.then(ns => {
+    if (!ns) { goLocal("Sa browser na 'to lang naka-save. Buksan sa claude.ai para ma-sync."); return; }
+    db = ns; mode = "db";
+    const s = $("sync"); s.className = "sync"; s.textContent = "Kumokonekta…";
+    let loaded = false;
+    const t = setTimeout(() => { if (!loaded) { s.className = "sync warn"; s.textContent = "Hindi pa maabot ang data. Baka luma ang nakikita mo."; } }, 10000);
+    const since = keyOf(Date.now() - 13 * DAY);
+    db.collection("days").where("date", ">=", since).onSnapshot(snap => {
+      snap.docs.forEach(d => { const b = d.data(); if (b && Array.isArray(b.sessions)) days[d.id] = b.sessions.slice(); });
+      snap.docChanges().forEach(ch => { if (ch.type === "removed") delete days[ch.doc.id]; });
+      if (!snap.metadata.fromCache) { loaded = true; clearTimeout(t); s.className = "sync"; s.textContent = "Naka-sync"; }
+      render();
+    }, e => { clearTimeout(t); s.className = "sync warn"; s.textContent = "Nawala ang koneksyon sa data. I-refresh mamaya."; });
+    db.doc("state/current").onSnapshot(snap => {
+      const b = snap.exists ? snap.data() : null;
+      current = b && b.active ? { cat: b.cat, start: b.start } : null;
+      render();
+    }, () => {});
+  }).catch(() => goLocal("Sa browser na 'to lang naka-save. Buksan sa claude.ai para ma-sync."));
+})();
+</script>
+</body>
+</html>
