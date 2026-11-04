@@ -155,6 +155,16 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
 .time-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
 .time-row label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 600; color: var(--ink-soft); }
 .time-row input { font: 16px var(--body); color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; min-height: 40px; }
+/* Kasabay inside a log: total at a glance, start and end one tap away */
+.kas-row { padding: 9px 0; border-top: 1px solid var(--line); }
+.kas-row:first-child { border-top: none; }
+.kas-head { all: unset; box-sizing: border-box; display: grid; grid-template-columns: 12px 1fr auto; gap: 10px; align-items: center; width: 100%; cursor: pointer; }
+.kas-head:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.kas-head .dot { width: 10px; height: 10px; border-radius: 50%; }
+.kas-head .n { font-weight: 600; }
+.kas-head .s { color: var(--ink-soft); font-size: 13px; }
+.kas-head .v { font-variant-numeric: tabular-nums; font-weight: 600; }
+.kas-edit { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
 /* Edit tiles */
 .cat-row { display: grid; grid-template-columns: 40px 1fr 40px auto; gap: 8px; align-items: center; }
 .cat-row.off input { opacity: .4; }
@@ -283,7 +293,7 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
 <div class="sheet-wrap" id="sheet-wrap">
   <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title">
     <h3 id="sheet-title">Ayusin natin 'to</h3>
-    <div class="time-row">
+    <div class="time-row" id="sheet-times">
       <label>Start <input type="time" id="sheet-start"></label>
       <label>End <input type="time" id="sheet-end"></label>
       <button class="btn primary" id="sheet-save-time" hidden>Save time</button>
@@ -291,9 +301,14 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
     <p class="sync warn" id="sheet-err" role="alert" style="margin:0" hidden></p>
     <p class="empty" id="sheet-sub"></p>
     <div class="tiles" id="sheet-tiles"></div>
-    <div class="tagrow" id="sheet-tags"></div>
+    <div>
+      <p class="sub-h" style="margin:0 0 4px">Kasabay</p>
+      <div class="rows" id="sheet-kas" style="margin-top:0"></div>
+      <div class="chips" style="margin-top:8px"><button class="btn" id="sheet-kas-add">+ Add Kasabay</button></div>
+      <div class="tagrow" id="sheet-tags" style="margin-top:10px" hidden></div>
+    </div>
     <div class="chips">
-      <button class="btn" id="sheet-delete">Delete</button>
+      <button class="btn" id="sheet-delete">Delete log</button>
       <button class="btn primary" id="sheet-close">Done</button>
     </div>
   </div>
@@ -316,7 +331,7 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
 <nav class="tabs" id="tabs" hidden><div class="in">
   <button id="tab-now" class="on">Ngayon</button>
   <button id="tab-gaps">Gaps<span class="badge" id="gap-badge" hidden></span></button>
-  <button id="tab-week">Linggo</button>
+  <button id="tab-week">Week</button>
 </div></nav>
 
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
@@ -859,7 +874,8 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
       n.append(nn, ss);
       const v = document.createElement("div"); v.className = "v"; v.textContent = fmtDur(x.end - x.start);
       r.append(dot, n, v);
-      if (!x.live) { r.style.cursor = "pointer"; r.tabIndex = 0; r.addEventListener("click", () => openSheet(today, x.id)); r.addEventListener("keydown", e => { if (e.key === "Enter") openSheet(today, x.id); }); }
+      const openRow = () => x.live ? openLiveSheet() : openSheet(today, x.id);
+      r.style.cursor = "pointer"; r.tabIndex = 0; r.addEventListener("click", openRow); r.addEventListener("keydown", e => { if (e.key === "Enter") openRow(); });
       tl.appendChild(r);
     });
 
@@ -962,6 +978,7 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
     const find = () => (days[key] || []).find(s => s.id === id);
     const x = find(); if (!x) return;
     editing = { key, id };
+    resetSheet(false);
     $("sheet-start").value = toHM(x.start);
     $("sheet-end").value = toHM(x.end);
     $("sheet-save-time").hidden = true;
@@ -973,24 +990,123 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
       if (s) { carveKas(s.start, s.end, c.id); s.cat = c.id; saveDay(key); }   // a log can't be Kasabay of itself
       closeSheet(); render();
     }, x.cat === c.id)));
-    // On a past log, a chip covers the whole log. Off removes that category's time from it.
-    const drawKas = () => {
-      const s = find(); if (!s) { closeSheet(); return; }
-      const inLog = id => (kasDays[key] || []).filter(k => k.cat === id && overlapMs(k, s) > 0);
-      kasButtons($("sheet-tags"), shownCats().map(c => c.id).filter(c => c !== s.cat), id => inLog(id).length > 0, (catId, on) => {
-        const cur = find(); if (!cur) { closeSheet(); return; }
-        carveKas(cur.start, cur.end, catId);
-        if (on) (kasDays[key] = kasDays[key] || []).push({ id: uid(), c: Date.now(), cat: catId, start: cur.start, end: cur.end });
-        saveDay(key); drawKas(); render();
-      }, id => {
-        const ms = inLog(id).reduce((a, k) => a + overlapMs(k, s), 0);
-        return CAT[id].name + (ms ? " · " + fmtDur(ms) : "");
-      });
-    };
-    drawKas();
+    drawSheetKas();
     $("sheet-wrap").classList.add("show");
   }
   function closeSheet() { $("sheet-wrap").classList.remove("show"); editing = null; }
+  // The running log only opens its Kasabay. Its own start lives behind Edit on the live card.
+  function resetSheet(live) {
+    kasOpen = null; kasAdding = false;
+    $("sheet-times").hidden = live;
+    $("sheet-tiles").hidden = live;
+    $("sheet-delete").hidden = live;
+    $("sheet-err").hidden = true;
+  }
+  function openLiveSheet() {
+    if (!current) return;
+    editing = { key: keyOf(Date.now()), id: "live" };
+    resetSheet(true);
+    $("sheet-sub").textContent = CAT[current.cat].name + ", running pa. Kasabay muna ang ayusin natin.";
+    drawSheetKas();
+    $("sheet-wrap").classList.add("show");
+  }
+  // The stretch of time the open sheet is about.
+  function sheetRange() {
+    if (!editing) return null;
+    if (editing.id === "live") {
+      if (!current) return null;
+      const now = Date.now();
+      return { start: Math.max(liveChainStart(), midnight(now)), end: now, cat: current.cat, live: true };
+    }
+    return (days[editing.key] || []).find(s => s.id === editing.id) || null;
+  }
+
+  // ---------- Kasabay inside a log ----------
+  let kasOpen = null, kasAdding = false;    // which row shows its times; whether the + Add chips are out
+  function drawSheetKas() {
+    const r = sheetRange(); if (!r) { closeSheet(); return; }
+    const key = editing.key, el = $("sheet-kas"), now = Date.now();
+    el.innerHTML = "";
+    const list = (kasDays[key] || []).filter(k => overlapMs(k, r) > 0).map(k => ({ id: k.id, cat: k.cat, start: k.start, end: k.end }));
+    if (r.live) activeKas().forEach(k => list.push({ id: "live:" + k.cat, cat: k.cat, start: k.start, end: kasEnd(k, now), running: true }));
+    list.sort((a, b) => a.start - b.start);
+    if (!list.length) { const p = document.createElement("p"); p.className = "empty"; p.textContent = "Wala. Focused, love it."; el.appendChild(p); }
+    list.forEach(k => el.appendChild(kasRow(k, key, r)));
+    const tags = $("sheet-tags");
+    tags.hidden = !kasAdding;
+    $("sheet-kas-add").textContent = kasAdding ? "Wag na" : "+ Add Kasabay";
+    if (kasAdding) kasButtons(tags, shownCats().map(c => c.id).filter(c => c !== r.cat), () => false, id => addKasToLog(id));
+  }
+  function kasRow(k, key, r) {
+    const c = CAT[k.cat] || { name: k.cat, c: "#999" };
+    const row = document.createElement("div"); row.className = "kas-row";
+    const head = document.createElement("button"); head.className = "kas-head"; head.type = "button";
+    head.setAttribute("aria-expanded", kasOpen === k.id ? "true" : "false");
+    const dot = document.createElement("span"); dot.className = "dot"; dot.style.background = c.c;
+    const n = document.createElement("span");
+    const nn = document.createElement("div"); nn.className = "n"; nn.textContent = c.name;
+    const ss = document.createElement("div"); ss.className = "s"; ss.textContent = fmtTime(k.start) + " – " + (k.running ? "ngayon" : fmtTime(k.end));
+    n.append(nn, ss);
+    const v = document.createElement("span"); v.className = "v"; v.textContent = fmtDur(k.end - k.start);
+    head.append(dot, n, v);
+    head.addEventListener("click", () => { kasOpen = kasOpen === k.id ? null : k.id; drawSheetKas(); });
+    row.appendChild(head);
+    if (kasOpen !== k.id) return row;
+
+    const box = document.createElement("div"); box.className = "kas-edit";
+    const times = document.createElement("div"); times.className = "time-row";
+    const field = (label, value, disabled) => {
+      const l = document.createElement("label"); l.textContent = label + " ";
+      const i = document.createElement("input"); i.type = "time"; i.value = value; i.disabled = !!disabled;
+      l.appendChild(i); times.appendChild(l); return i;
+    };
+    const si = field("Start", toHM(k.start)), ei = k.running ? null : field("End", toHM(k.end));
+    const err = document.createElement("p"); err.className = "sync warn"; err.setAttribute("role", "alert"); err.style.margin = "0"; err.hidden = true;
+    const fail = text => { err.textContent = text; err.hidden = false; };
+    const acts = document.createElement("div"); acts.className = "chips";
+    const save = document.createElement("button"); save.className = "btn primary"; save.textContent = "Save time";
+    const del = document.createElement("button"); del.className = "btn"; del.textContent = "Delete";
+    save.addEventListener("click", () => {
+      if (!si.value || (ei && !ei.value)) { fail("Lagyan muna ng oras."); return; }
+      const d0 = midnight(new Date(key.replace(/-/g, "/")).getTime());
+      const at = hm => { const [h, m] = hm.split(":").map(Number); return new Date(d0).setHours(h, m, 0, 0); };
+      // An untouched field keeps its exact time.
+      let ns = si.value === toHM(k.start) ? k.start : at(si.value);
+      let ne = !ei ? k.end : ei.value === toHM(k.end) ? k.end : (ei.value === "00:00" ? d0 + DAY : at(ei.value));
+      if (ne - ns < MIN) { fail("Dapat mas maaga ang start kaysa sa end."); return; }
+      if (ns < r.start - MIN || ne > r.end + MIN) { fail("Dapat nasa loob ng log: " + fmtTime(r.start) + " – " + (r.live ? "ngayon" : fmtTime(r.end)) + "."); return; }
+      ns = Math.max(ns, r.start); ne = Math.min(ne, r.end);
+      if (k.running) {
+        const live = (current.kas || []).find(x => x.cat === k.cat);
+        if (live) { live.start = Math.max(ns, current.start); delete live.auto; saveCurrent(); }
+      } else {
+        const stored = (kasDays[key] || []).find(x => x.id === k.id);
+        if (stored) { stored.start = ns; stored.end = ne; saveDay(key); }
+      }
+      kasOpen = null; drawSheetKas(); render();
+      showToast("Goods, naayos na.", []);
+    });
+    del.addEventListener("click", () => {
+      if (k.running) { current.kas = (current.kas || []).filter(x => x.cat !== k.cat); saveCurrent(); }
+      else { kasDays[key] = (kasDays[key] || []).filter(x => x.id !== k.id); saveDay(key); }
+      kasOpen = null; drawSheetKas(); render();
+    });
+    acts.append(save, del);
+    box.append(times, err, acts);
+    row.appendChild(box);
+    return row;
+  }
+  // A new Kasabay starts as the last 15 minutes of the log, with its times open to adjust.
+  function addKasToLog(cat) {
+    const r = sheetRange(); if (!r) { closeSheet(); return; }
+    const key = editing.key, id = uid();
+    const end = r.end, start = Math.max(r.start, end - 15 * MIN);
+    (kasDays[key] = kasDays[key] || []).push({ id, c: Date.now(), cat, start, end });
+    saveDay(key);
+    kasAdding = false; kasOpen = id;
+    drawSheetKas(); render();
+  }
+  $("sheet-kas-add").addEventListener("click", () => { kasAdding = !kasAdding; drawSheetKas(); });
   function sheetTimeChanged() {
     const s = editing && (days[editing.key] || []).find(v => v.id === editing.id);
     $("sheet-save-time").hidden = !s || ($("sheet-start").value === toHM(s.start) && $("sheet-end").value === toHM(s.end));
