@@ -412,7 +412,7 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
   const days = {};               // key -> sessions[]
   const kasDays = {};            // key -> finished Kasabay [{ id, c, cat, start, end }]
   let lastClosed = null;         // { key, id } of the session closed by the latest switch
-  let toastTap = 0, toastTimer = null, kasTap = 0, showAllKas = false, kasPop = null, liveShown = null;
+  let toastTap = 0, toastTimer = null, kasTap = 0, showAllKas = false, kasPop = null, liveShown = null, liveChipSig = "";
   let gapDay = "today", skipped = new Set();
   let editing = null;            // { key, id }
 
@@ -880,13 +880,22 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
       const others = shownCats().map(x => x.id).filter(id => id !== current.cat);
       const onNow = id => running.some(k => k.cat === id);
       const cats = showAllKas ? others : others.filter(id => KAS_QUICK.includes(id) || onNow(id));
-      kasButtons($("live-tags"), cats, onNow, id => toggleKas(id), id => {
+      const chipLabel = id => {
         const k = running.find(x => x.cat === id);
         return CAT[id].name + (k ? " · " + fmtDur(kasEnd(k, now) - k.start) : "");
-      }, { text: showAllKas ? "Mas kaunti" : "Iba pa", onClick: () => { showAllKas = !showAllKas; render(); } });
-      if (kasPop) {   // only the chip just turned on pops, not the whole row on every render
+      };
+      // Same chips as last time: just refresh the labels. A rebuild right after a tap, which every save
+      // triggers through its sync, would cut off the pop and restart the pulse.
+      const chipSig = [cats.join(), running.map(k => k.cat).join(), showAllKas].join("|");
+      if (chipSig !== liveChipSig) {
+        kasButtons($("live-tags"), cats, onNow, id => toggleKas(id), chipLabel, { text: showAllKas ? "Mas kaunti" : "Iba pa", onClick: () => { showAllKas = !showAllKas; render(); } });
+        liveChipSig = chipSig;
+      } else {
+        $("live-tags").querySelectorAll("[data-id]").forEach(b => { b.textContent = chipLabel(b.dataset.id); });
+      }
+      if (kasPop) {
         const fresh = $("live-tags").querySelector('[data-id="' + kasPop + '"]');
-        if (fresh) fresh.classList.add("pop");
+        if (fresh) playOnce(fresh, "pop");
         kasPop = null;
       }
     } else {
@@ -903,7 +912,7 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
     const showing = current && CAT[current.cat] ? current.cat : "";
     if (showing !== liveShown) {
       if (liveShown !== null) ["live-cat", "live-label", "live-timer"].forEach(id => {
-        const el = $(id); el.classList.remove("swap"); void el.offsetWidth; el.classList.add("swap");
+        playOnce($(id), "swap");
       });
       liveShown = showing;
     }
@@ -1027,6 +1036,14 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
       });
       wt.append(h, rows);
     }
+  }
+
+  // Play a CSS animation once. The class comes off after, or reopening the tab would play it again.
+  function playOnce(el, cls) {
+    el.classList.remove(cls);
+    void el.offsetWidth;   // forces a restart if it was already running
+    el.classList.add(cls);
+    el.addEventListener("animationend", () => el.classList.remove(cls), { once: true });
   }
 
   // ---------- tile ripple ----------
