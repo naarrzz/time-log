@@ -787,6 +787,21 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
     b.addEventListener("click", onClick);
     return b;
   }
+  // Render runs every minute and on every sync. Tiles are only rebuilt when the tiles themselves change.
+  let tilesSig = "";
+  function drawTiles() {
+    const el = $("tiles"), cats = shownCats(), sig = cats.map(c => [c.id, c.name, c.c].join(":")).join("|");
+    if (sig !== tilesSig) {
+      el.innerHTML = "";
+      cats.forEach(c => { const b = tileButton(c, () => switchTo(c.id), false); b.dataset.id = c.id; el.appendChild(b); });
+      tilesSig = sig;
+    }
+    el.querySelectorAll(".tile").forEach(b => {
+      const on = !!current && current.cat === b.dataset.id;
+      b.classList.toggle("on", on);
+      b.setAttribute("aria-pressed", on ? "true" : "false");
+    });
+  }
   function renderBar(el, list, d0) {
     el.innerHTML = "";
     let cur = d0;
@@ -852,8 +867,7 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
     }
 
     // tiles
-    const tiles = $("tiles"); tiles.innerHTML = "";
-    shownCats().forEach(c => tiles.appendChild(tileButton(c, () => switchTo(c.id), current && current.cat === c.id)));
+    drawTiles();
 
     // today
     const list = sessionsFor(today, true);
