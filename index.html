@@ -905,7 +905,7 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
       // triggers through its sync, would cut off the pop and restart the pulse.
       const chipSig = [cats.join(), running.map(k => k.cat).join(), showAllKas].join("|");
       if (chipSig !== liveChipSig) {
-        kasButtons($("live-tags"), cats, onNow, id => toggleKas(id), chipLabel, { text: showAllKas ? "Mas kaunti" : "Iba pa", onClick: () => { showAllKas = !showAllKas; render(); } });
+        kasButtons($("live-tags"), cats, onNow, id => toggleKas(id), chipLabel, { text: showAllKas ? "Less" : "Iba pa", onClick: () => { showAllKas = !showAllKas; render(); } });
         liveChipSig = chipSig;
       } else {
         $("live-tags").querySelectorAll("[data-id]").forEach(b => { b.textContent = chipLabel(b.dataset.id); });
