@@ -135,12 +135,37 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
 .tagrow .lbl { font-size: 12px; color: var(--ink-soft); margin-right: 2px; }
 .btn.tag[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
 .sub-h { font-size: 12px; color: var(--ink-soft); margin: 14px 0 0; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+/* Login */
+.login { max-width: 400px; margin: 0 auto; padding: calc(56px + env(safe-area-inset-top)) 16px 32px; display: flex; flex-direction: column; gap: 16px; }
+.login h1 { font-family: var(--display); font-size: 30px; margin: 0; letter-spacing: -0.01em; }
+.login form { display: flex; flex-direction: column; gap: 12px; }
+.login label { display: flex; flex-direction: column; gap: 6px; font-weight: 600; font-size: 13px; }
+.login input { font: 16px var(--body); color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; width: 100%; }
+.login input:focus-visible { outline: 3px solid var(--accent); outline-offset: 1px; }
+.login .btn { padding: 12px 14px; font-size: 14px; }
+.login .btn:disabled { opacity: .6; }
+.login hr { width: 100%; border: 0; border-top: 1px solid var(--line); margin: 8px 0 0; }
 [hidden] { display: none !important; }
 @media (prefers-reduced-motion: reduce) { .tile { transition: none; } }
 </style>
 </head>
 <body>
-<div class="app">
+<main class="login" id="login" hidden>
+  <h1>Time Log</h1>
+  <p class="empty">Mag-login para ma-sync ang logs mo sa lahat ng device.</p>
+  <form id="login-form">
+    <label>Email <input id="login-email" type="email" autocomplete="username" autocapitalize="none" required></label>
+    <label>Password <input id="login-pass" type="password" autocomplete="current-password" required></label>
+    <p class="sync warn" id="login-err" role="alert" style="margin:0" hidden></p>
+    <button class="btn primary" id="login-btn" type="submit">Mag-login</button>
+    <button class="btn" id="login-switch" type="button">Wala pang account? Gumawa dito</button>
+  </form>
+  <hr>
+  <button class="btn" id="guest-btn" type="button">Subukan nang walang account</button>
+  <p class="sync" style="margin:0">Sa browser na 'to lang mase-save ang logs kapag walang account.</p>
+</main>
+
+<div class="app" id="app" hidden>
   <header class="top">
     <h1>Time Log</h1>
     <div>
@@ -219,6 +244,14 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
         <h2>Kasabay</h2>
         <div id="week-tags"></div>
       </div>
+      <div class="card">
+        <h2>Data mo</h2>
+        <p class="empty" id="acct-who" style="margin-bottom:12px"></p>
+        <div class="chips">
+          <button class="btn" id="export-btn">I-download ang backup</button>
+          <button class="btn" id="signout-btn">Mag-sign out</button>
+        </div>
+      </div>
     </div>
   </section>
 </div>
@@ -241,12 +274,15 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
   </div>
 </div>
 
-<nav class="tabs"><div class="in">
+<nav class="tabs" id="tabs" hidden><div class="in">
   <button id="tab-now" class="on">Ngayon</button>
   <button id="tab-gaps">Gaps<span class="badge" id="gap-badge" hidden></span></button>
   <button id="tab-week">Linggo</button>
 </div></nav>
 
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 <script>
 (() => {
   const CATS = [
@@ -302,15 +338,17 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
   const MON = ["Ene", "Peb", "Mar", "Abr", "May", "Hun", "Hul", "Ago", "Set", "Okt", "Nob", "Dis"];
   const dayLabel = key => { const [y, m, d] = key.split("-").map(Number); const dt = new Date(y, m - 1, d); return DOW[dt.getDay()] + ", " + MON[m - 1] + " " + d; };
 
-  // ---------- storage (db when available, this-browser fallback otherwise) ----------
-  let db = null, mode = "loading";
-  const queues = {};
-  function enqueue(path, fn) {
-    const prev = queues[path] || Promise.resolve();
-    const next = prev.then(fn, fn);
-    queues[path] = next.catch(() => {});
-    return next;
-  }
+  // ---------- storage (Firestore when signed in, this browser only in guest mode) ----------
+  // The web config is public by design. firestore.rules is what protects the data.
+  const FB_CONFIG = {
+    apiKey: "AIzaSyDuWPw17oOLKisRGIsqU6Pb4P-cwTfZIoA",
+    authDomain: "time-log-110526.firebaseapp.com",
+    projectId: "time-log-110526",
+    storageBucket: "time-log-110526.firebasestorage.app",
+    messagingSenderId: "217558064160",
+    appId: "1:217558064160:web:0af8dd7403f4db65b4b045"
+  };
+  let auth = null, db = null, root = "", mode = "loading";
   function localSave() {
     try { localStorage.setItem("oraslog", JSON.stringify({ current, days })); } catch (e) {}
   }
@@ -322,18 +360,26 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
     const sessions = (days[key] || []).slice().sort((a, b) => a.start - b.start);
     days[key] = sessions;
     if (mode !== "db") { localSave(); return Promise.resolve(); }
-    return enqueue("days/" + key, () => db.doc("days/" + key).set({ date: key, sessions })).catch(onWriteError);
+    // Firestore applies this to its on-device cache right away and syncs in order once online.
+    // Don't chain writes on these promises: they only resolve after the server answers.
+    return db.doc(root + "/days/" + key).set({ date: key, sessions }).catch(onWriteError);
   }
   function saveCurrent() {
     if (mode !== "db") { localSave(); return Promise.resolve(); }
     const body = current ? { active: true, cat: current.cat, start: current.start, tags: current.tags || [] } : { active: false };
-    return enqueue("state/current", () => db.doc("state/current").set(body)).catch(onWriteError);
+    return db.doc(root + "/state/current").set(body).catch(onWriteError);
   }
-  function onWriteError(e) {
+  function setSync(text, warn) {
     const s = $("sync");
-    s.className = "sync warn";
-    s.textContent = e && e.code === "quota_exceeded" ? "Puno na ang storage. Sabihin kay Claude para malinis ang lumang logs." : "Hindi na-save ang huling pagbabago. Subukan ulit mamaya.";
+    s.className = warn ? "sync warn" : "sync";
+    s.textContent = text;
   }
+  function errorText(e, fallback) {
+    if (e && e.code === "permission-denied") return "Walang access sa data ang account na 'to. I-check ang Firestore rules.";
+    if (e && e.code === "resource-exhausted") return "Naabot ang daily limit ng Firebase. Babalik ito bukas.";
+    return fallback;
+  }
+  function onWriteError(e) { setSync(errorText(e, "Hindi na-save ang huling pagbabago. Subukan ulit mamaya."), true); }
 
   // ---------- core actions ----------
   // Remove [start, end) from every saved log: logs inside it go, logs crossing it get trimmed or split.
@@ -652,12 +698,24 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
 
   // ---------- edit sheet ----------
   function openSheet(key, id) {
-    const x = (days[key] || []).find(s => s.id === id); if (!x) return;
+    // Look the log up on every action: each save triggers a snapshot that replaces the objects in days.
+    const find = () => (days[key] || []).find(s => s.id === id);
+    const x = find(); if (!x) return;
     editing = { key, id };
     $("sheet-sub").textContent = fmtTime(x.start) + " – " + fmtTime(x.end) + " · " + fmtDur(x.end - x.start) + ". Palitan ang category:";
     const st = $("sheet-tiles"); st.innerHTML = "";
-    CATS.forEach(c => st.appendChild(tileButton(c, () => { x.cat = c.id; x.tags = cleanTags(c.id, x.tags); saveDay(key); closeSheet(); render(); }, x.cat === c.id)));
-    const drawTags = () => tagButtons($("sheet-tags"), x.cat, x.tags, (id, on) => { x.tags = toggled(x.tags, id, on); saveDay(key); drawTags(); render(); });
+    CATS.forEach(c => st.appendChild(tileButton(c, () => {
+      const s = find();
+      if (s) { s.cat = c.id; s.tags = cleanTags(c.id, s.tags); saveDay(key); }
+      closeSheet(); render();
+    }, x.cat === c.id)));
+    const drawTags = () => {
+      const s = find(); if (!s) { closeSheet(); return; }
+      tagButtons($("sheet-tags"), s.cat, s.tags, (tagId, on) => {
+        const cur = find(); if (!cur) { closeSheet(); return; }
+        cur.tags = toggled(cur.tags, tagId, on); saveDay(key); drawTags(); render();
+      });
+    };
     drawTags();
     $("sheet-wrap").classList.add("show");
   }
@@ -687,32 +745,136 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
   }, 1000);
   setInterval(render, 60000);
 
-  function goLocal(reason) {
-    if (mode === "db") return;
-    mode = "local"; localLoad(); render();
-    const s = $("sync"); s.className = "sync warn"; s.textContent = reason;
+  function showApp() {
+    $("login").hidden = true;
+    $("app").hidden = false;
+    $("tabs").hidden = false;
   }
-  const use = window.claude && window.claude.use ? window.claude.use("db") : Promise.resolve(null);
-  use.then(ns => {
-    if (!ns) { goLocal("Sa browser na 'to lang naka-save. Buksan sa claude.ai para ma-sync."); return; }
-    db = ns; mode = "db";
-    const s = $("sync"); s.className = "sync"; s.textContent = "Kumokonekta…";
-    let loaded = false;
-    const t = setTimeout(() => { if (!loaded) { s.className = "sync warn"; s.textContent = "Hindi pa maabot ang data. Baka luma ang nakikita mo."; } }, 10000);
+  function showLogin(error) {
+    $("app").hidden = true;
+    $("tabs").hidden = true;
+    $("login").hidden = false;
+    $("login-err").hidden = !error;
+    $("login-err").textContent = error || "";
+  }
+  function goLocal() {
+    mode = "local"; localLoad(); showApp(); render();
+    setSync("Sa browser na 'to lang naka-save. Mag-login para ma-sync.", true);
+    $("acct-who").textContent = "Walang account. Nasa browser na 'to lang ang logs mo.";
+    $("signout-btn").textContent = "Bumalik sa login";
+  }
+
+  // Sync status comes from both listeners. Metadata changes are on so it updates when the phone reconnects.
+  const syncMeta = {};
+  function showSync() {
+    const list = Object.values(syncMeta);
+    if (list.some(m => m.fromCache)) setSync("Offline. Naka-save sa device, magsi-sync pag may internet.");
+    else if (list.some(m => m.hasPendingWrites)) setSync("Nagsi-sync…");
+    else setSync("Naka-sync");
+  }
+  function onListenError(e) { setSync(errorText(e, "Nawala ang koneksyon sa data. I-refresh mamaya."), true); }
+  function startDb(user) {
+    root = "users/" + user.uid; mode = "db";
+    showApp();
+    setSync("Kumokonekta…");
+    $("acct-who").textContent = "Naka-login bilang " + user.email + ".";
+    const live = { includeMetadataChanges: true };
     const since = keyOf(Date.now() - 13 * DAY);
-    db.collection("days").where("date", ">=", since).onSnapshot(snap => {
+    db.collection(root + "/days").where("date", ">=", since).onSnapshot(live, snap => {
       snap.docs.forEach(d => { const b = d.data(); if (b && Array.isArray(b.sessions)) days[d.id] = b.sessions.slice(); });
       snap.docChanges().forEach(ch => { if (ch.type === "removed") delete days[ch.doc.id]; });
-      if (!snap.metadata.fromCache) snap.docChanges().forEach(ch => { if (ch.type !== "removed" && normalizeDay(ch.doc.id)) saveDay(ch.doc.id); });
-      if (!snap.metadata.fromCache) { loaded = true; clearTimeout(t); s.className = "sync"; s.textContent = "Naka-sync"; }
+      if (!snap.metadata.fromCache) snap.docs.forEach(d => { if (normalizeDay(d.id)) saveDay(d.id); });
+      syncMeta.days = snap.metadata; showSync();
       render();
-    }, e => { clearTimeout(t); s.className = "sync warn"; s.textContent = "Nawala ang koneksyon sa data. I-refresh mamaya."; });
-    db.doc("state/current").onSnapshot(snap => {
+    }, onListenError);
+    db.doc(root + "/state/current").onSnapshot(live, snap => {
       const b = snap.exists ? snap.data() : null;
       current = b && b.active ? { cat: b.cat, start: b.start, tags: b.tags || [] } : null;
+      syncMeta.current = snap.metadata; showSync();
       render();
-    }, () => {});
-  }).catch(() => goLocal("Sa browser na 'to lang naka-save. Buksan sa claude.ai para ma-sync."));
+    }, onListenError);
+  }
+
+  // ---------- login ----------
+  const LOGIN_ERRORS = {
+    "auth/invalid-credential": "Mali ang email o password.",
+    "auth/wrong-password": "Mali ang email o password.",
+    "auth/user-not-found": "Mali ang email o password.",
+    "auth/invalid-email": "Mukhang mali ang email.",
+    "auth/too-many-requests": "Masyadong maraming subok. Maghintay muna nang kaunti.",
+    "auth/network-request-failed": "Walang internet. Kailangan ng internet sa unang login.",
+    "auth/email-already-in-use": "May account na ang email na 'to. Mag-login na lang.",
+    "auth/weak-password": "Masyadong maikli ang password. Gumamit ng 6 characters o higit pa."
+  };
+  let signingUp = false;
+  $("login-switch").addEventListener("click", () => {
+    signingUp = !signingUp;
+    $("login-btn").textContent = signingUp ? "Gumawa ng account" : "Mag-login";
+    $("login-switch").textContent = signingUp ? "May account na? Mag-login dito" : "Wala pang account? Gumawa dito";
+    $("login-pass").autocomplete = signingUp ? "new-password" : "current-password";
+    $("login-err").hidden = true;
+  });
+  $("login-form").addEventListener("submit", e => {
+    e.preventDefault();
+    if (!auth) return;
+    const btn = $("login-btn");
+    btn.disabled = true;
+    $("login-err").hidden = true;
+    const email = $("login-email").value.trim(), pass = $("login-pass").value;
+    (signingUp ? auth.createUserWithEmailAndPassword(email, pass) : auth.signInWithEmailAndPassword(email, pass))
+      .then(() => { $("login-pass").value = ""; })
+      .catch(err => showLogin(LOGIN_ERRORS[err.code] || "Hindi maka-login. Subukan ulit."))
+      .finally(() => { btn.disabled = false; });
+  });
+  $("guest-btn").addEventListener("click", goLocal);
+  $("signout-btn").addEventListener("click", () => {
+    if (mode !== "db") { location.reload(); return; }
+    const pending = Object.values(syncMeta).some(m => m.hasPendingWrites);
+    if (pending && !confirm("May logs pang hindi naka-sync. Mag-sign out pa rin?")) return;
+    auth.signOut().then(() => location.reload());
+  });
+
+  // ---------- backup ----------
+  async function exportData() {
+    const all = {};
+    if (mode === "db") {
+      const snap = await db.collection(root + "/days").get();   // every day, not just the recent ones on screen
+      snap.forEach(d => { all[d.id] = d.data().sessions || []; });
+    } else {
+      Object.assign(all, days);
+    }
+    const text = JSON.stringify({ exportedAt: new Date().toISOString(), current, days: all }, null, 2);
+    const name = "time-log-backup-" + keyOf(Date.now()) + ".json";
+    const file = new File([text], name, { type: "application/json" });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      try { await navigator.share({ files: [file] }); return; }
+      catch (e) { if (e.name === "AbortError") return; }   // anything else: fall through to a normal download
+    }
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(file); a.download = name;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+  }
+  $("export-btn").addEventListener("click", () => {
+    exportData().catch(() => showToast("Hindi na-download ang backup. Subukan ulit.", []));
+  });
+
+  // ---------- start ----------
+  if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
+  if (!window.firebase || !firebase.auth || !firebase.firestore) {
+    showLogin("Hindi ma-load ang sync. I-check ang internet tapos buksan ulit.");
+  } else {
+    firebase.initializeApp(FB_CONFIG);
+    auth = firebase.auth();
+    db = firebase.firestore();
+    db.settings({ ignoreUndefinedProperties: true, merge: true });
+    // Without this the cache lives in memory only, and offline logs vanish when the app closes.
+    db.enablePersistence({ synchronizeTabs: true }).catch(() => {});
+    auth.onAuthStateChanged(user => {
+      if (user) { if (mode !== "db") startDb(user); }
+      else if (mode !== "local") showLogin();
+    });
+  }
 })();
 </script>
 </body>
