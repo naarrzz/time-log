@@ -1,6 +1,9 @@
 # Time Log
 
-**Live demo:** https://naarrzz.github.io/time-log/ (tap "Try muna, no account" to try it; logs stay in your browser)
+**Live demo:** https://naarrzz.github.io/time-log/
+
+- **No account:** your logs are saved only in that browser on that device. They stay when you refresh or close the browser, but you can lose them if you clear your browsing data, use a private tab, remove the browser or home screen app, or don't open the app for a while in Safari.
+- **With an account:** your logs are saved to your account, so they sync across your devices and stay even if you lose the browser.
 
 A one-tap personal time audit app, built to see where my hours actually go between work, school, coaching, content and training.
 

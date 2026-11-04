@@ -183,6 +183,7 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
   <form id="login-form">
     <label>Email <input id="login-email" type="email" autocomplete="username" autocapitalize="none" required></label>
     <label>Password <input id="login-pass" type="password" autocomplete="current-password" required></label>
+    <label id="login-pass2-wrap" hidden>Retype password <input id="login-pass2" type="password" autocomplete="new-password"></label>
     <p class="sync warn" id="login-err" role="alert" style="margin:0" hidden></p>
     <button class="btn primary" id="login-btn" type="submit">Login</button>
     <button class="btn" id="login-switch" type="button">Wala pang account? Gawa tayo</button>
@@ -1297,17 +1298,21 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
     $("login-btn").textContent = signingUp ? "Gawa na" : "Login";
     $("login-switch").textContent = signingUp ? "May account na pala? Login dito" : "Wala pang account? Gawa tayo";
     $("login-pass").autocomplete = signingUp ? "new-password" : "current-password";
+    $("login-pass2-wrap").hidden = !signingUp;
+    $("login-pass2").required = signingUp;
+    $("login-pass2").value = "";
     $("login-err").hidden = true;
   });
   $("login-form").addEventListener("submit", e => {
     e.preventDefault();
     if (!auth) return;
+    if (signingUp && $("login-pass").value !== $("login-pass2").value) { showLogin("Di magkapareho ang passwords. Try ulit."); return; }
     const btn = $("login-btn");
     btn.disabled = true;
     $("login-err").hidden = true;
     const email = $("login-email").value.trim(), pass = $("login-pass").value;
     (signingUp ? auth.createUserWithEmailAndPassword(email, pass) : auth.signInWithEmailAndPassword(email, pass))
-      .then(() => { $("login-pass").value = ""; })
+      .then(() => { $("login-pass").value = ""; $("login-pass2").value = ""; })
       .catch(err => showLogin(LOGIN_ERRORS[err.code] || "Hindi maka-login. Subukan ulit."))
       .finally(() => { btn.disabled = false; });
   });
