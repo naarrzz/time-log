@@ -169,7 +169,7 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
 <body>
 <main class="login" id="login" hidden>
   <h1>Time Log</h1>
-  <p class="empty">Login muna, para synced logs mo kahit saang device.</p>
+  <p class="empty">Login muna, para synced yung logs mo on any device.</p>
   <form id="login-form">
     <label>Email <input id="login-email" type="email" autocomplete="username" autocapitalize="none" required></label>
     <label>Password <input id="login-pass" type="password" autocomplete="current-password" required></label>
@@ -692,7 +692,7 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
     };
     if (mins.length) add("Nope, ngayon lang", hideToast);
     mins.forEach(m => add(m === 60 ? "1 hour na" : m + " mins na", () => (onPick || backdate)(m)));
-    if (mins.length) add("Iba, pili ako", () => askStartTime(onPick, tap || toastTap, tap || toastTap));
+    if (mins.length) add("Pili akong time", () => askStartTime(onPick, tap || toastTap, tap || toastTap));
     chips.hidden = !mins.length;
     $("toast").classList.add("show");
     clearTimeout(toastTimer);
