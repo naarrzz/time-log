@@ -200,7 +200,7 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
         <div class="rows" id="today-totals"></div>
       </div>
       <div class="card">
-        <h2>Mga log ngayon</h2>
+        <h2 id="today-logs-title">Mga log today</h2>
         <div class="rows" id="today-list"></div>
       </div>
     </div>
@@ -223,7 +223,7 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
         </div>
       </div>
       <div class="card" id="gap-done" hidden>
-        <h2>Walang butas</h2>
+        <h2>Walang gaps</h2>
         <p class="empty" id="gap-done-text">Kumpleto ang log mo para sa araw na ito.</p>
       </div>
     </div>
@@ -303,23 +303,28 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
   const MIN = 60000, HOUR = 3600000, DAY = 86400000;
   const GAP_MIN = 15 * MIN;
 
-  // Kasabay tags: things happening alongside the main activity. They never add time to totals.
-  const TAGS = [
-    { id: "kain", name: "Kumakain",         hideFor: "kain" },
-    { id: "fin",  name: "Work standby", hideFor: "intern" }
-  ];
-  const TAG = Object.fromEntries(TAGS.map(t => [t.id, t]));
+  // Kasabay: another category running alongside the main activity, with its own start and end.
+  // It never adds time to totals. Main activity = where the attention is; Kasabay = what's dividing it.
+  const KAS_QUICK = ["scroll", "kain", "intern"];                // shown first; the rest sit behind "Iba pa"
+  const TAG_CAT = { kain: "kain", fin: "intern" };               // old whole-log tags -> category
   const WORK_UNTIL = new Date(2026, 10, 13, 23, 59).getTime();   // internship ends Nov 13
-  const inWorkHours = t => { const d = new Date(t), wd = d.getDay(), h = d.getHours(); return t <= WORK_UNTIL && wd >= 1 && wd <= 5 && h >= 9 && h < 18; };
-  const autoTags = (cat, t) => (cat !== "intern" && inWorkHours(t)) ? ["fin"] : [];
-  const cleanTags = (cat, tags) => (tags || []).filter(t => TAG[t] && TAG[t].hideFor !== cat);
+  // Internship hours on the day of t, or null if that day has none.
+  const workSpan = t => {
+    const d = new Date(t), wd = d.getDay();
+    if (t > WORK_UNTIL || wd < 1 || wd > 5) return null;
+    return [new Date(d).setHours(9, 0, 0, 0), new Date(d).setHours(18, 0, 0, 0)];
+  };
+  const inWorkHours = t => { const w = workSpan(t); return !!w && t >= w[0] && t < w[1]; };
+  const autoKas = (cat, t) => (cat !== "intern" && inWorkHours(t)) ? [{ cat: "intern", start: t, auto: true }] : [];
+  const kasEnd = (k, t) => k.auto && workSpan(k.start) ? Math.min(t, workSpan(k.start)[1]) : t;   // auto standby stops at 6 PM
   const createdOf = s => s.c || (s.id && s.id.length > 5 ? parseInt(s.id.slice(0, -5), 36) : 0) || 0;
 
   // ---------- state ----------
-  let current = null;            // { cat, start }
+  let current = null;            // { cat, start, kas: [{ cat, start, auto? }] }
   const days = {};               // key -> sessions[]
+  const kasDays = {};            // key -> finished Kasabay [{ id, c, cat, start, end }]
   let lastClosed = null;         // { key, id } of the session closed by the latest switch
-  let toastTap = 0, toastTimer = null;
+  let toastTap = 0, toastTimer = null, kasTap = 0, showAllKas = false;
   let gapDay = "today", skipped = new Set();
   let editing = null;            // { key, id }
 
@@ -350,23 +355,31 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
   };
   let auth = null, db = null, root = "", mode = "loading";
   function localSave() {
-    try { localStorage.setItem("oraslog", JSON.stringify({ current, days })); } catch (e) {}
+    try { localStorage.setItem("oraslog", JSON.stringify({ current, days, kasabay: kasDays })); } catch (e) {}
+  }
+  function parseCurrent(b) {
+    if (!b || b.active === false || !b.cat) return null;
+    const kas = Array.isArray(b.kas) ? b.kas
+      : (b.tags || []).filter(t => TAG_CAT[t]).map(t => ({ cat: TAG_CAT[t], start: b.start, auto: t === "fin" }));
+    return { cat: b.cat, start: b.start, kas };
   }
   function localLoad() {
-    try { const raw = localStorage.getItem("oraslog"); if (raw) { const o = JSON.parse(raw); current = o.current || null; Object.assign(days, o.days || {}); } } catch (e) {}
+    try { const raw = localStorage.getItem("oraslog"); if (raw) { const o = JSON.parse(raw); current = parseCurrent(o.current); Object.assign(days, o.days || {}); Object.assign(kasDays, o.kasabay || {}); } } catch (e) {}
     Object.keys(days).forEach(k => { if (normalizeDay(k)) saveDay(k); });
   }
   function saveDay(key) {
-    const sessions = (days[key] || []).slice().sort((a, b) => a.start - b.start);
+    const sessions = mergeAdjacent(days[key] || []);
+    const kasabay = mergeAdjacent(kasDays[key] || []);
     days[key] = sessions;
+    kasDays[key] = kasabay;
     if (mode !== "db") { localSave(); return Promise.resolve(); }
     // Firestore applies this to its on-device cache right away and syncs in order once online.
     // Don't chain writes on these promises: they only resolve after the server answers.
-    return db.doc(root + "/days/" + key).set({ date: key, sessions }).catch(onWriteError);
+    return db.doc(root + "/days/" + key).set({ date: key, sessions, kasabay }).catch(onWriteError);
   }
   function saveCurrent() {
     if (mode !== "db") { localSave(); return Promise.resolve(); }
-    const body = current ? { active: true, cat: current.cat, start: current.start, tags: current.tags || [] } : { active: false };
+    const body = current ? { active: true, cat: current.cat, start: current.start, kas: current.kas || [] } : { active: false };
     return db.doc(root + "/state/current").set(body).catch(onWriteError);
   }
   function setSync(text, warn) {
@@ -401,8 +414,58 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
     }
     return touched;
   }
-  // Clean up overlaps already saved (from before this fix, or from another device). Newest wins.
+  // Same as carve, for Kasabay. With cat, only that category; without, all of them.
+  function carveKas(start, end, cat) {
+    const touched = new Set();
+    for (let d = midnight(start); d < end; d = nextMidnight(d)) {
+      const key = keyOf(d), list = kasDays[key];
+      if (!list) continue;
+      const out = []; let changed = false;
+      list.forEach(k => {
+        if ((cat && k.cat !== cat) || k.end <= start || k.start >= end) { out.push(k); return; }
+        changed = true;
+        if (k.start < start && start - k.start >= MIN) out.push(Object.assign({}, k, { end: start }));
+        if (k.end > end && k.end - end >= MIN) out.push(Object.assign({}, k, { id: uid(), start: end }));
+      });
+      if (changed) { kasDays[key] = out; touched.add(key); }
+    }
+    return touched;
+  }
+  // Back-to-back entries of the same category are one log. A gap under a minute still counts as
+  // back-to-back, since anything that short never gets saved between them.
+  function mergeAdjacent(list) {
+    const out = [];
+    list.slice().sort((a, b) => a.start - b.start).forEach(s => {
+      const last = out[out.length - 1];
+      if (last && last.cat === s.cat && s.start - last.end < MIN) {
+        last.end = Math.max(last.end, s.end);
+        last.c = Math.max(createdOf(last), createdOf(s));
+      } else out.push(Object.assign({}, s));
+    });
+    return out;
+  }
+  // Old logs carried Kasabay as tags covering the whole log. Turn them into timed entries.
+  function migrateTags(key) {
+    let changed = false;
+    (days[key] || []).forEach(s => {
+      if (!s.tags) return;
+      s.tags.forEach(t => {
+        if (TAG_CAT[t] && TAG_CAT[t] !== s.cat) (kasDays[key] = kasDays[key] || []).push({ id: uid(), c: createdOf(s), cat: TAG_CAT[t], start: s.start, end: s.end });
+      });
+      delete s.tags;
+      changed = true;
+    });
+    return changed;
+  }
+  // Tidy a day that's already saved: old tags, leftover overlaps, back-to-back logs.
   function normalizeDay(key) {
+    const tags = migrateTags(key), overlaps = cleanOverlaps(key);
+    const before = (days[key] || []).length + (kasDays[key] || []).length;
+    const merged = mergeAdjacent(days[key] || []), mergedKas = mergeAdjacent(kasDays[key] || []);
+    return tags || overlaps || merged.length + mergedKas.length !== before;
+  }
+  // Overlaps from before the carve fix, or from another device. Newest wins.
+  function cleanOverlaps(key) {
     const list = days[key];
     if (!list || list.length < 2) return false;
     const byStart = list.slice().sort((a, b) => a.start - b.start);
@@ -422,17 +485,15 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
     days[key] = out;
     return true;
   }
-  function addSession(cat, start, end, tags) {
+  function addSession(cat, start, end) {
     const touched = carve(start, end);
-    const ids = [], created = Date.now(), t = cleanTags(cat, tags);
+    const ids = [], created = Date.now();
     let s = start;
     while (s < end) {
       const e = Math.min(end, nextMidnight(s));
       if (e - s >= MIN) {
         const key = keyOf(s), id = uid();
-        const rec = { id, c: created, cat, start: s, end: e };
-        if (t.length) rec.tags = t.slice();
-        (days[key] = days[key] || []).push(rec);
+        (days[key] = days[key] || []).push({ id, c: created, cat, start: s, end: e });
         ids.push({ key, id }); touched.add(key);
       }
       s = e;
@@ -440,24 +501,66 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
     touched.forEach(k => saveDay(k));
     return ids;
   }
+  function addKas(cat, start, end) {
+    const touched = new Set();
+    let s = start;
+    while (s < end) {
+      const e = Math.min(end, nextMidnight(s));
+      if (e - s >= MIN) {
+        const key = keyOf(s);
+        (kasDays[key] = kasDays[key] || []).push({ id: uid(), c: Date.now(), cat, start: s, end: e });
+        touched.add(key);
+      }
+      s = e;
+    }
+    touched.forEach(k => saveDay(k));
+  }
+  // Ending the main activity ends every Kasabay running with it, so a forgotten one can't run for hours.
+  function closeCurrent(now) {
+    addSession(current.cat, current.start, now);
+    (current.kas || []).forEach(k => addKas(k.cat, k.start, kasEnd(k, now)));
+  }
+  const activeKas = () => current ? (current.kas || []).filter(k => !k.auto || Date.now() < kasEnd(k, Infinity)) : [];   // auto standby is over after 6 PM
+  function toggleKas(cat) {
+    if (!current) return;
+    const now = Date.now(), k = (current.kas || []).find(x => x.cat === cat);
+    if (k) {
+      addKas(k.cat, k.start, kasEnd(k, now));
+      current.kas = current.kas.filter(x => x !== k);
+      saveCurrent(); render();
+      showToast("Tapos na ang Kasabay na " + CAT[cat].name + ".", []);
+      return;
+    }
+    current.kas = (current.kas || []).concat([{ cat, start: now }]);
+    kasTap = now;
+    saveCurrent(); render();
+    showToast("Kasabay ng " + CAT[current.cat].name + ": " + CAT[cat].name + ". Kanina pa ba?", [15, 30, 60], m => backdateKas(cat, m));
+  }
+  function backdateKas(cat, mins) {
+    const k = current && (current.kas || []).find(x => x.cat === cat);
+    if (!k) return;
+    k.start = Math.max(current.start, kasTap - mins * MIN);   // can't start before the main activity did
+    saveCurrent(); render();
+    showToast("Kasabay na " + CAT[cat].name + ", simula " + fmtTime(k.start) + ".", []);
+  }
   function switchTo(cat) {
     const now = Date.now();
-    if (current) addSession(current.cat, current.start, now, current.tags);
+    if (current) closeCurrent(now);
     if (current && current.cat === cat) {
       current = null;
       saveCurrent(); render();
       showToast("Itinigil ang " + CAT[cat].name + ".", []);
       return;
     }
-    const tags = autoTags(cat, now);
-    current = { cat, start: now, tags };
+    const kas = autoKas(cat, now);
+    current = { cat, start: now, kas };
     toastTap = now;
     saveCurrent(); render();
-    showToast("Nagsimula ang " + CAT[cat].name + " ngayon." + (tags.length ? " Naka-tag na Work standby." : "") + " Kanina pa ba?", [15, 30, 60]);
+    showToast("Nagsimula ang " + CAT[cat].name + " ngayon." + (kas.length ? " Kasabay: Internship." : "") + " Kanina pa ba?", [15, 30, 60]);
   }
   function stopNow() {
     if (!current) return;
-    addSession(current.cat, current.start, Date.now(), current.tags);
+    closeCurrent(Date.now());
     const name = CAT[current.cat].name;
     current = null;
     saveCurrent(); render();
@@ -466,34 +569,48 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
   function backdate(mins) {
     if (!current) return;
     const newStart = toastTap - mins * MIN;
-    carve(newStart, Date.now()).forEach(k => saveDay(k));
+    const now = Date.now();
+    const touched = carve(newStart, now);
+    carveKas(newStart, toastTap).forEach(k => touched.add(k));   // those logs are gone, so their Kasabay go too
+    touched.forEach(k => saveDay(k));
     current.start = newStart;
+    (current.kas || []).forEach(k => {
+      if (!k.auto) return;
+      const w = workSpan(newStart);
+      k.start = w ? Math.max(newStart, w[0]) : k.start;
+    });
     saveCurrent(); render();
     showToast(CAT[current.cat].name + ", simula " + fmtTime(newStart) + ".", []);
   }
-  function tagButtons(el, cat, tags, onToggle) {
+  // cats: which chips to show. labelOf: optional chip text. extra: optional trailing chip { text, onClick }.
+  function kasButtons(el, cats, isOn, onToggle, labelOf, extra) {
     el.innerHTML = "";
-    const lbl = document.createElement("span"); lbl.className = "lbl"; lbl.textContent = "Kasabay:";
+    const lbl = document.createElement("span"); lbl.className = "lbl"; lbl.textContent = "Kasabay ng:";
     el.appendChild(lbl);
-    TAGS.filter(t => t.hideFor !== cat).forEach(t => {
-      const on = (tags || []).includes(t.id);
+    cats.forEach(id => {
+      const on = isOn(id);
       const b = document.createElement("button");
-      b.className = "btn tag"; b.textContent = t.name;
+      b.className = "btn tag"; b.textContent = labelOf ? labelOf(id) : CAT[id].name;
       b.setAttribute("aria-pressed", on ? "true" : "false");
-      b.addEventListener("click", () => onToggle(t.id, !on));
+      b.addEventListener("click", () => onToggle(id, !on));
       el.appendChild(b);
     });
+    if (extra) {
+      const b = document.createElement("button");
+      b.className = "btn"; b.textContent = extra.text;
+      b.addEventListener("click", extra.onClick);
+      el.appendChild(b);
+    }
   }
-  const toggled = (tags, id, on) => on ? Array.from(new Set([...(tags || []), id])) : (tags || []).filter(x => x !== id);
 
   // ---------- toast ----------
-  function showToast(text, mins) {
+  function showToast(text, mins, onPick) {
     $("toast-text").textContent = text;
     const chips = $("toast-chips"); chips.innerHTML = "";
     mins.forEach(m => {
       const b = document.createElement("button");
       b.className = "btn"; b.textContent = m === 60 ? "1 oras na" : m + " min na";
-      b.addEventListener("click", () => backdate(m));
+      b.addEventListener("click", () => (onPick || backdate)(m));
       chips.appendChild(b);
     });
     chips.hidden = !mins.length;
@@ -511,6 +628,41 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
       if (e > s) list.push({ id: "live", cat: current.cat, start: s, end: e, live: true });
     }
     return list.sort((a, b) => a.start - b.start);
+  }
+  // Finished Kasabay for a day, plus the ones running now.
+  function kasFor(key) {
+    const list = (kasDays[key] || []).slice();
+    const s0 = midnight(new Date(key.replace(/-/g, "/")).getTime()), now = Date.now();
+    activeKas().forEach(k => {
+      const s = Math.max(k.start, s0), e = Math.min(kasEnd(k, now), s0 + DAY);
+      if (e > s) list.push({ cat: k.cat, start: s, end: e, live: true });
+    });
+    return list;
+  }
+  const overlapMs = (a, b) => Math.max(0, Math.min(a.end, b.end) - Math.max(a.start, b.start));
+  // Time with at least one Kasabay running. Two at once still counts once.
+  function unionMs(list) {
+    let total = 0, cur = -Infinity;
+    list.slice().sort((a, b) => a.start - b.start).forEach(k => {
+      const s = Math.max(k.start, cur);
+      if (k.end > s) { total += k.end - s; cur = k.end; }
+    });
+    return total;
+  }
+  // "Scroll 25m, Kain/Pahinga 10m" for one log.
+  function kasSummary(key, x) {
+    const t = {};
+    kasFor(key).forEach(k => { const ms = overlapMs(k, x); if (ms > 0) t[k.cat] = (t[k.cat] || 0) + ms; });
+    return Object.entries(t).filter(e => e[1] >= MIN).sort((a, b) => b[1] - a[1]).map(([c, ms]) => (CAT[c] ? CAT[c].name : c) + " " + fmtDur(ms)).join(", ");
+  }
+  // When the running log really began, counting the back-to-back log before it.
+  function liveChainStart() {
+    if (!current) return 0;
+    let st = current.start;
+    (days[keyOf(st)] || []).slice().sort((a, b) => b.start - a.start).forEach(s => {
+      if (s.cat === current.cat && s.end <= st && st - s.end < MIN) st = s.start;
+    });
+    return st;
   }
   function totals(list) {
     const t = {};
@@ -572,17 +724,26 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
   function render() {
     const now = Date.now(), today = keyOf(now);
     $("today-label").textContent = dayLabel(today);
+    $("today-logs-title").textContent = "Mga log today · " + dayLabel(today).split(", ")[1];
 
     // live card
     if (current && CAT[current.cat]) {
       const c = CAT[current.cat];
       $("live-swatch").style.background = c.c;
-      $("live-label").textContent = "Ginagawa mo mula " + fmtTime(current.start);
+      const chain = liveChainStart();
+      $("live-label").textContent = "Ginagawa mo mula " + fmtTime(chain);
       $("live-cat").textContent = c.name;
-      $("live-timer").textContent = fmtClock(now - current.start);
+      $("live-timer").textContent = fmtClock(now - chain);
       $("stop-btn").hidden = false;
       $("live-tags").hidden = false;
-      tagButtons($("live-tags"), current.cat, current.tags, (id, on) => { current.tags = toggled(current.tags, id, on); saveCurrent(); render(); });
+      const running = activeKas();
+      const others = CATS.map(x => x.id).filter(id => id !== current.cat);
+      const onNow = id => running.some(k => k.cat === id);
+      const cats = showAllKas ? others : others.filter(id => KAS_QUICK.includes(id) || onNow(id));
+      kasButtons($("live-tags"), cats, onNow, id => toggleKas(id), id => {
+        const k = running.find(x => x.cat === id);
+        return CAT[id].name + (k ? " · " + fmtDur(kasEnd(k, now) - k.start) : "");
+      }, { text: showAllKas ? "Mas kaunti" : "Iba pa", onClick: () => { showAllKas = !showAllKas; render(); } });
     } else {
       $("live-tags").hidden = true;
       $("live-swatch").style.background = "var(--line)";
@@ -602,14 +763,17 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
     totalsRows($("today-totals"), totals(list));
     const tl = $("today-list"); tl.innerHTML = "";
     if (!list.length) { const p = document.createElement("p"); p.className = "empty"; p.textContent = "Mag-tap ng tile sa itaas para magsimula."; tl.appendChild(p); }
-    list.slice().reverse().forEach(x => {
+    // The running log and the back-to-back log before it show as one row.
+    const chainStart = Math.max(liveChainStart(), midnight(now));
+    const rows = current ? list.filter(x => x.live || x.start < chainStart).map(x => x.live ? Object.assign({}, x, { start: chainStart }) : x) : list;
+    rows.slice().reverse().forEach(x => {
       const c = CAT[x.cat] || { name: x.cat, c: "#999" };
       const r = document.createElement("div"); r.className = "row";
       const dot = document.createElement("span"); dot.className = "dot"; dot.style.background = c.c;
       const n = document.createElement("div");
       const nn = document.createElement("div"); nn.className = "n"; nn.textContent = c.name + (x.live ? " · ngayon" : "");
-      const ss = document.createElement("div"); ss.className = "s"; const xt = cleanTags(x.cat, x.live ? current.tags : x.tags).map(t => TAG[t].name);
-      ss.textContent = fmtTime(x.start) + " – " + (x.live ? "ngayon" : fmtTime(x.end)) + (xt.length ? " · " + xt.join(", ") : "");
+      const ss = document.createElement("div"); ss.className = "s"; const xk = kasSummary(today, x);
+      ss.textContent = fmtTime(x.start) + " – " + (x.live ? "ngayon" : fmtTime(x.end)) + (xk ? " · Kasabay: " + xk : "");
       n.append(nn, ss);
       const v = document.createElement("div"); v.className = "v"; v.textContent = fmtDur(x.end - x.start);
       r.append(dot, n, v);
@@ -633,11 +797,16 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
     }
     $("gap-card").hidden = false; $("gap-done").hidden = true;
     const g = gaps[0];
-    $("gap-count").textContent = gaps.length + " butas na hindi pa naka-log";
+    $("gap-count").textContent = gaps.length + (gaps.length === 1 ? " gap" : " gaps") + " na hindi pa naka-log";
     $("gap-time").textContent = fmtTime(g.start) + " – " + fmtTime(g.end);
     $("gap-sub").textContent = fmtDur(g.end - g.start) + ". Ano ginawa mo dito?";
     const gt = $("gap-tiles"); gt.innerHTML = "";
-    CATS.forEach(c => gt.appendChild(tileButton(c, () => { addSession(c.id, g.start, g.end, autoTags(c.id, g.start)); render(); showToast(fmtDur(g.end - g.start) + " na " + c.name + ", naka-log.", []); }, false)));
+    CATS.forEach(c => gt.appendChild(tileButton(c, () => {
+      addSession(c.id, g.start, g.end);
+      const w = c.id !== "intern" && workSpan(g.start);
+      if (w) addKas("intern", Math.max(g.start, w[0]), Math.min(g.end, w[1]));
+      render(); showToast(fmtDur(g.end - g.start) + " na " + c.name + ", naka-log.", []);
+    }, false)));
     $("gap-skip").onclick = () => { skipped.add(key + ":" + g.start); renderGaps(); };
   }
   function renderWeek() {
@@ -658,15 +827,19 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
     totalsRows($("week-totals"), all, allMs);
 
     // Kasabay summary
-    let finActive = 0, finStandby = 0, kainMs = 0, kainN = 0;
-    const standbyBy = {};
+    let dividedMs = 0, finActive = 0, finStandby = 0;
+    const pairs = {};
     for (let i = 6; i >= 0; i--) {
-      sessionsFor(keyOf(now - i * DAY), true).forEach(x => {
-        const ms = x.end - x.start;
-        const tg = cleanTags(x.cat, x.live ? current.tags : x.tags);
-        if (x.cat === "intern") finActive += ms;
-        if (tg.includes("fin")) { finStandby += ms; standbyBy[x.cat] = (standbyBy[x.cat] || 0) + ms; }
-        if (tg.includes("kain")) { kainMs += ms; kainN++; }
+      const key = keyOf(now - i * DAY), sessions = sessionsFor(key, true);
+      const kas = kasFor(key).filter(k => sessions.some(x => overlapMs(k, x) > 0));
+      dividedMs += unionMs(kas);
+      finStandby += unionMs(kas.filter(k => k.cat === "intern"));
+      sessions.forEach(x => {
+        if (x.cat === "intern") finActive += x.end - x.start;
+        kas.forEach(k => {
+          const ms = overlapMs(k, x);
+          if (ms > 0 && k.cat !== x.cat) { const p = x.cat + "+" + k.cat; pairs[p] = (pairs[p] || 0) + ms; }
+        });
       });
     }
     const wt = $("week-tags"); wt.innerHTML = "";
@@ -679,20 +852,25 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
       const v = document.createElement("div"); v.className = "v"; v.textContent = val;
       r.append(dot, n, v); return r;
     };
-    if (!finActive && !finStandby && !kainN) {
+    if (!dividedMs && !finActive) {
       const p = document.createElement("p"); p.className = "empty";
-      p.textContent = "Wala pang naka-tag. Sa oras ng internship (Lun–Biy, 9–6), kusang nata-tag na standby ang ibang ginagawa mo.";
+      p.textContent = "Wala pang Kasabay. Mag-tap ng Kasabay kapag may ginagawa kang iba nang sabay.";
       wt.appendChild(p); return;
     }
     const top = document.createElement("div"); top.className = "rows"; top.style.marginTop = "0";
-    top.appendChild(row(CAT.intern.c, "Oras sa Internship", fmtDur(finActive) + " active · " + fmtDur(finStandby) + " standby", fmtDur(finActive + finStandby)));
-    if (kainN) top.appendChild(row(CAT.kain.c, "Kumakain habang may ginagawa", kainN + (kainN === 1 ? " beses" : " beses"), fmtDur(kainMs)));
+    if (dividedMs) top.appendChild(row("#B4542A", "Hati ang atensyon", Math.round(dividedMs / (allMs || 1) * 100) + "% ng naka-log", fmtDur(dividedMs)));
+    if (finActive || finStandby) top.appendChild(row(CAT.intern.c, "Oras sa Internship", fmtDur(finActive) + " active · " + fmtDur(finStandby) + " standby", fmtDur(finActive + finStandby)));
     wt.appendChild(top);
-    if (finStandby) {
-      const h = document.createElement("p"); h.className = "sub-h"; h.textContent = "Ginawa mo habang standby";
+    const topPairs = Object.entries(pairs).sort((a, b) => b[1] - a[1]).slice(0, 5);
+    if (topPairs.length) {
+      const h = document.createElement("p"); h.className = "sub-h"; h.textContent = "Pinakamadalas pagsabayin";
       const rows = document.createElement("div"); rows.className = "rows";
+      topPairs.forEach(([p, ms]) => {
+        const [main, kas] = p.split("+");
+        const name = id => CAT[id] ? CAT[id].name : id;
+        rows.appendChild(row(CAT[kas] ? CAT[kas].c : "#999", name(main) + " + " + name(kas), "", fmtDur(ms)));
+      });
       wt.append(h, rows);
-      totalsRows(rows, standbyBy, finStandby, "% ng standby");
     }
   }
 
@@ -706,17 +884,24 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
     const st = $("sheet-tiles"); st.innerHTML = "";
     CATS.forEach(c => st.appendChild(tileButton(c, () => {
       const s = find();
-      if (s) { s.cat = c.id; s.tags = cleanTags(c.id, s.tags); saveDay(key); }
+      if (s) { carveKas(s.start, s.end, c.id); s.cat = c.id; saveDay(key); }   // a log can't be Kasabay of itself
       closeSheet(); render();
     }, x.cat === c.id)));
-    const drawTags = () => {
+    // On a past log, a chip covers the whole log. Off removes that category's time from it.
+    const drawKas = () => {
       const s = find(); if (!s) { closeSheet(); return; }
-      tagButtons($("sheet-tags"), s.cat, s.tags, (tagId, on) => {
+      const inLog = id => (kasDays[key] || []).filter(k => k.cat === id && overlapMs(k, s) > 0);
+      kasButtons($("sheet-tags"), CATS.map(c => c.id).filter(c => c !== s.cat), id => inLog(id).length > 0, (catId, on) => {
         const cur = find(); if (!cur) { closeSheet(); return; }
-        cur.tags = toggled(cur.tags, tagId, on); saveDay(key); drawTags(); render();
+        carveKas(cur.start, cur.end, catId);
+        if (on) (kasDays[key] = kasDays[key] || []).push({ id: uid(), c: Date.now(), cat: catId, start: cur.start, end: cur.end });
+        saveDay(key); drawKas(); render();
+      }, id => {
+        const ms = inLog(id).reduce((a, k) => a + overlapMs(k, s), 0);
+        return CAT[id].name + (ms ? " · " + fmtDur(ms) : "");
       });
     };
-    drawTags();
+    drawKas();
     $("sheet-wrap").classList.add("show");
   }
   function closeSheet() { $("sheet-wrap").classList.remove("show"); editing = null; }
@@ -724,6 +909,8 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
   $("sheet-wrap").addEventListener("click", e => { if (e.target.id === "sheet-wrap") closeSheet(); });
   $("sheet-delete").addEventListener("click", () => {
     if (!editing) return;
+    const gone = (days[editing.key] || []).find(s => s.id === editing.id);
+    if (gone) carveKas(gone.start, gone.end);   // its Kasabay go with it
     days[editing.key] = (days[editing.key] || []).filter(s => s.id !== editing.id);
     saveDay(editing.key); closeSheet(); render();
   });
@@ -741,7 +928,7 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
   // ---------- boot ----------
   render();
   setInterval(() => {
-    if (current) $("live-timer").textContent = fmtClock(Date.now() - current.start);
+    if (current) $("live-timer").textContent = fmtClock(Date.now() - liveChainStart());
   }, 1000);
   setInterval(render, 60000);
 
@@ -781,15 +968,17 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
     const live = { includeMetadataChanges: true };
     const since = keyOf(Date.now() - 13 * DAY);
     db.collection(root + "/days").where("date", ">=", since).onSnapshot(live, snap => {
-      snap.docs.forEach(d => { const b = d.data(); if (b && Array.isArray(b.sessions)) days[d.id] = b.sessions.slice(); });
-      snap.docChanges().forEach(ch => { if (ch.type === "removed") delete days[ch.doc.id]; });
+      snap.docs.forEach(d => {
+        const b = d.data();
+        if (b && Array.isArray(b.sessions)) { days[d.id] = b.sessions.slice(); kasDays[d.id] = (b.kasabay || []).slice(); }
+      });
+      snap.docChanges().forEach(ch => { if (ch.type === "removed") { delete days[ch.doc.id]; delete kasDays[ch.doc.id]; } });
       if (!snap.metadata.fromCache) snap.docs.forEach(d => { if (normalizeDay(d.id)) saveDay(d.id); });
       syncMeta.days = snap.metadata; showSync();
       render();
     }, onListenError);
     db.doc(root + "/state/current").onSnapshot(live, snap => {
-      const b = snap.exists ? snap.data() : null;
-      current = b && b.active ? { cat: b.cat, start: b.start, tags: b.tags || [] } : null;
+      current = parseCurrent(snap.exists ? snap.data() : null);
       syncMeta.current = snap.metadata; showSync();
       render();
     }, onListenError);
@@ -839,9 +1028,9 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
     const all = {};
     if (mode === "db") {
       const snap = await db.collection(root + "/days").get();   // every day, not just the recent ones on screen
-      snap.forEach(d => { all[d.id] = d.data().sessions || []; });
+      snap.forEach(d => { const b = d.data(); all[d.id] = { sessions: b.sessions || [], kasabay: b.kasabay || [] }; });
     } else {
-      Object.assign(all, days);
+      Object.keys(days).forEach(k => { all[k] = { sessions: days[k], kasabay: kasDays[k] || [] }; });
     }
     const text = JSON.stringify({ exportedAt: new Date().toISOString(), current, days: all }, null, 2);
     const name = "time-log-backup-" + keyOf(Date.now()) + ".json";

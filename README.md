@@ -7,7 +7,7 @@ A one-tap personal time audit app, built to see where my hours actually go betwe
 - **Ngayon**: tap what you're doing; the timer runs until you tap something else. Forgot to switch? Backdate with 15 / 30 / 60 min chips.
 - **Gaps**: walks you through unlogged stretches (15+ minutes) one at a time.
 - **Linggo**: last 7 days, totals per category, and a Kasabay summary.
-- **Kasabay tags**: things happening alongside the main activity (eating, Work standby). They never add time, so daily totals stay honest.
+- **Kasabay**: anything running alongside the main activity, with its own start and end. It never adds time, so daily totals stay honest, and Linggo shows how much of your time was divided and which pairs happen most.
 
 - **Sync and offline**: signed-in logs sync through Cloud Firestore in real time and keep working with no internet.
 - **Backup**: download every log as a JSON file.
