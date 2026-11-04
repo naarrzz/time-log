@@ -708,7 +708,7 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
     input.type = "time"; input.className = "toast-time"; input.setAttribute("aria-label", "Oras ng simula");
     const t0 = new Date(shown); input.value = pad(t0.getHours()) + ":" + pad(t0.getMinutes());
     const ok = document.createElement("button"); ok.className = "btn"; ok.textContent = "Goods";
-    const no = document.createElement("button"); no.className = "btn"; no.textContent = "Wag na";
+    const no = document.createElement("button"); no.className = "btn"; no.textContent = "Nvm";
     no.addEventListener("click", hideToast);
     ok.addEventListener("click", () => {
       const [h, m] = input.value.split(":").map(Number);
@@ -1105,7 +1105,7 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
     list.forEach(k => el.appendChild(kasRow(k, key, r)));
     const tags = $("sheet-tags");
     tags.hidden = !kasAdding;
-    $("sheet-kas-add").textContent = kasAdding ? "Wag na" : "+ Add Kasabay";
+    $("sheet-kas-add").textContent = kasAdding ? "Nvm" : "+ Add Kasabay";
     if (kasAdding) kasButtons(tags, shownCats().map(c => c.id).filter(c => c !== r.cat), () => false, id => addKasToLog(id));
   }
   function kasRow(k, key, r) {
