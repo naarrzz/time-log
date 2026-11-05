@@ -1473,7 +1473,7 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
     // Same rule as accounts: existing no-account logs keep the old internship schedule, new ones start empty.
     try { const o = hadLocal ? JSON.parse(localStorage.getItem("oraslog")) : null; if (o && !o.schedules && Object.keys(o.days || {}).length) schedules = [{ id: uid(), cat: "intern", days: [1, 2, 3, 4, 5], start: "09:00", end: "18:00", until: "2026-11-13" }]; } catch (e) {}
     showApp(); render();
-    setSync("Sa browser na 'to lang naka-save. Mag-login para ma-sync.", true);
+    setSync("Naka-save lang sa browser na 'to. Mag-login para ma-sync.", true);
     $("acct-who").textContent = "Walang account. Nasa browser na 'to lang ang logs mo.";
     $("signout-btn").textContent = "Bumalik sa login";
   }
