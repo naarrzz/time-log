@@ -386,7 +386,7 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
     <div style="display:flex;flex-direction:column;gap:18px">
       <div class="card">
         <h2>Goals</h2>
-        <p class="empty" style="margin-bottom:10px">Ilang oras per week ang gusto mong ilaan? Makikita mo ang progress sa Week.</p>
+        <p class="empty" style="margin-bottom:10px">Ilang oras per day o per week ang gusto mong ilaan? Makikita mo ang progress sa Week.</p>
         <div class="rows" id="goal-list" style="margin-top:0"></div>
         <div class="chips" style="margin-top:10px"><button class="btn" id="goal-add">+ Add goal</button></div>
       </div>
@@ -482,7 +482,11 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
   <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="goal-title">
     <h3 id="goal-title">Goal</h3>
     <div><p class="sub-h" style="margin:0 0 8px">Anong tile?</p><div class="chips" id="goal-cats"></div></div>
-    <div class="time-row"><label>Oras per week <input type="number" id="goal-hours" min="0.5" max="168" step="0.5" inputmode="decimal"></label></div>
+    <div class="seg" id="goal-per" role="group" aria-label="Gaano kadalas" style="align-self:flex-start">
+      <button data-per="day" type="button">Per day</button>
+      <button data-per="week" type="button">Per week</button>
+    </div>
+    <div class="time-row"><label>Ilang oras? <input type="number" id="goal-hours" min="0.5" max="168" step="0.5" inputmode="decimal"></label></div>
     <p class="sync warn" id="goal-err" role="alert" style="margin:0" hidden></p>
     <div class="chips">
       <button class="btn danger" id="goal-delete">Delete</button>
@@ -552,7 +556,7 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
   const KAS_QUICK = ["scroll", "kain", "intern"];                // shown first; the rest sit behind "Iba pa"
   const TAG_CAT = { kain: "kain", fin: "intern" };               // old whole-log tags -> category
   // Schedules auto-start a Kasabay: a tile, days of the week, a daily time, and an optional last day.
-  let goals = [];                // [{ id, cat, hours }] hours per 7 days
+  let goals = [];                // [{ id, cat, hours, per: "day" | "week" }]; older ones without per are weekly
   let schedules = [];            // [{ id, cat, days: [0-6], start: "09:00", end: "18:00", until?: "2026-11-13" }]
   const atHM = (t, hm) => { const [h, m] = hm.split(":").map(Number); return new Date(t).setHours(h, m, 0, 0); };
   // A schedule's time window on the day of t, or null if it doesn't run that day.
@@ -1342,20 +1346,24 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
     const shown = goals.filter(g => CAT[g.cat] && !CAT[g.cat].hidden);
     const card = $("week-insight");
     card.hidden = !allMs && !shown.length;
-    const short = shown.map(g => ({ g, left: g.hours * HOUR - (all[g.cat] || 0) })).filter(x => x.left > 0).sort((a, b) => b.left - a.left)[0];
+    const todayTotals = totals(sessionsFor(keyOf(Date.now()), true));
+    const doneMs = g => g.per === "day" ? (todayTotals[g.cat] || 0) : (all[g.cat] || 0);
+    // Today's goals come first, since those are the ones you can still act on today.
+    const short = shown.map(g => ({ g, left: g.hours * HOUR - doneMs(g) })).filter(x => x.left > 0)
+      .sort((a, b) => (a.g.per === "day" ? 0 : 1) - (b.g.per === "day" ? 0 : 1) || b.left - a.left)[0];
     const top = Object.entries(all).filter(([id]) => id !== "tulog").sort((a, b) => b[1] - a[1])[0];
     let text = "";
-    if (short) text = CAT[short.g.cat].name + ": kulang pa ng " + fmtDur(short.left) + " para sa goal mo.";
+    if (short) text = CAT[short.g.cat].name + ": kulang pa ng " + fmtDur(short.left) + (short.g.per === "day" ? " today." : " ngayong 7 days.");
     else if (shown.length) text = "Pasok lahat ng goals mo. Ang galing!";
     else if (top) text = "Pinakamalaki ngayong 7 days: " + (CAT[top[0]] ? CAT[top[0]].name : top[0]) + ", " + fmtDur(top[1]) + ".";
     $("insight-text").textContent = text;
     const el = $("insight-goals"); el.innerHTML = "";
     shown.forEach(g => {
-      const ms = all[g.cat] || 0, c = CAT[g.cat];
+      const ms = doneMs(g), c = CAT[g.cat];
       const row = document.createElement("div"); row.className = "goal-row";
       const head = document.createElement("div"); head.className = "goal-top";
       const n = document.createElement("span"); n.textContent = c.name;
-      const v = document.createElement("span"); v.className = "v"; v.textContent = fmtHrs(ms) + " / " + g.hours + "h";
+      const v = document.createElement("span"); v.className = "v"; v.textContent = fmtHrs(ms) + " / " + g.hours + "h " + (g.per === "day" ? "today" : "· 7 days");
       head.append(n, v);
       const track = document.createElement("div"); track.className = "goal-track";
       const fill = document.createElement("div"); fill.className = "goal-fill";
@@ -1690,7 +1698,7 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
       const head = document.createElement("button"); head.className = "kas-head"; head.type = "button";
       const dot = document.createElement("span"); dot.className = "dot"; dot.style.background = c.c;
       const n = document.createElement("span"); n.className = "n"; n.textContent = c.name;
-      const v = document.createElement("span"); v.className = "v"; v.textContent = g.hours + "h / week";
+      const v = document.createElement("span"); v.className = "v"; v.textContent = g.hours + "h / " + (g.per === "day" ? "day" : "week");
       head.append(dot, n, v);
       head.addEventListener("click", () => openGoal(g.id));
       row.appendChild(head);
@@ -1708,9 +1716,14 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
       el.appendChild(b);
     });
   }
+  function drawGoalPer() {
+    document.querySelectorAll("#goal-per button").forEach(b => b.classList.toggle("on", b.dataset.per === goalDraft.per));
+  }
+  document.querySelectorAll("#goal-per button").forEach(b => b.addEventListener("click", () => { goalDraft.per = b.dataset.per; drawGoalPer(); }));
   function openGoal(id) {
     const g = goals.find(x => x.id === id);
-    goalDraft = g ? { id: g.id, cat: g.cat } : { id: uid(), cat: null, isNew: true };
+    goalDraft = g ? { id: g.id, cat: g.cat, per: g.per === "day" ? "day" : "week" } : { id: uid(), cat: null, per: "day", isNew: true };
+    drawGoalPer();
     $("goal-hours").value = g ? g.hours : "";
     $("goal-delete").hidden = !g;
     $("goal-err").hidden = true;
@@ -1731,9 +1744,11 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
     const fail = text => { $("goal-err").textContent = text; $("goal-err").hidden = false; };
     const hours = parseFloat($("goal-hours").value);
     if (!goalDraft.cat) { fail("Pili muna ng tile."); return; }
-    if (goals.some(x => x.cat === goalDraft.cat && x.id !== goalDraft.id)) { fail("May goal na ang tile na 'yan."); return; }
-    if (!(hours > 0) || hours > 168) { fail("Lagyan ng oras, hanggang 168 per week."); return; }
-    const rec = { id: goalDraft.id, cat: goalDraft.cat, hours };
+    const samePer = x => (x.per === "day" ? "day" : "week") === goalDraft.per;
+    if (goals.some(x => x.cat === goalDraft.cat && samePer(x) && x.id !== goalDraft.id)) { fail("May ganyang goal na ang tile na 'yan."); return; }
+    const cap = goalDraft.per === "day" ? 24 : 168;
+    if (!(hours > 0) || hours > cap) { fail("Lagyan ng oras, hanggang " + cap + (goalDraft.per === "day" ? " per day." : " per week.")); return; }
+    const rec = { id: goalDraft.id, cat: goalDraft.cat, hours, per: goalDraft.per };
     goals = goalDraft.isNew ? goals.concat([rec]) : goals.map(x => x.id === rec.id ? rec : x);
     saveGoals(); closeGoal(); render();
     showToast("Goods, set na ang goal.", []);
