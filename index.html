@@ -1355,7 +1355,7 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
     let text = "";
     if (short) text = CAT[short.g.cat].name + ": kulang pa ng " + fmtDur(short.left) + (short.g.per === "day" ? " today." : " ngayong 7 days.");
     else if (shown.length) text = "Pasok lahat ng goals mo. Ang galing!";
-    else if (top) text = "Pinakamalaki ngayong 7 days: " + (CAT[top[0]] ? CAT[top[0]].name : top[0]) + ", " + fmtDur(top[1]) + ".";
+    else if (top) text = "Main character mo this week: " + (CAT[top[0]] ? CAT[top[0]].name : top[0]) + ", " + fmtDur(top[1]) + ".";
     $("insight-text").textContent = text;
     const el = $("insight-goals"); el.innerHTML = "";
     shown.forEach(g => {
