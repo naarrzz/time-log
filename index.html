@@ -207,10 +207,11 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
 .extras .btn[aria-expanded="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
 /* Sub-labels */
 .sub-input { font: 16px var(--body); color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 7px 10px; min-width: 0; flex: 1 1 120px; }
-.cat-subs { grid-column: 1 / -1; font: 16px var(--body); color: var(--ink); background: transparent; border: 0; border-bottom: 1px solid var(--line); padding: 2px 2px 8px; min-width: 0; width: 100%; }
-.cat-row.off .cat-subs { display: none; }
+.cat-more { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 8px; padding: 2px 0 8px; }
+.cat-more .chips { justify-content: flex-end; }
+.cat-subs { font: 16px var(--body); color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; min-width: 0; width: 100%; }
 /* Edit tiles */
-.cat-row { display: grid; grid-template-columns: 40px 1fr 40px 78px; gap: 8px; align-items: center; }
+.cat-row { display: grid; grid-template-columns: 40px 1fr 74px; gap: 8px; align-items: center; }
 .cat-row.off input { opacity: .4; }
 .cat-row input[type="color"] { width: 40px; height: 40px; padding: 2px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
 .cat-row input[type="text"] { font: 16px var(--body); color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; min-width: 0; width: 100%; }
@@ -367,6 +368,12 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
         <h2>Kasabay</h2>
         <div id="week-tags"></div>
       </div>
+    </div>
+  </section>
+
+  <!-- SETTINGS -->
+  <section id="view-settings" class="view" hidden>
+    <div style="display:flex;flex-direction:column;gap:18px">
       <div class="card">
         <h2>Schedule</h2>
         <p class="empty" style="margin-bottom:10px">May work o klase na fixed ang oras? Kusa itong magka-Kasabay sa mga oras na 'yon.</p>
@@ -480,6 +487,7 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
   <button id="tab-now" class="on">Ngayon</button>
   <button id="tab-gaps">Gaps<span class="badge" id="gap-badge" hidden></span></button>
   <button id="tab-week">Week</button>
+  <button id="tab-settings">Settings</button>
 </div></nav>
 
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
@@ -1857,7 +1865,7 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
   });
 
   // ---------- edit tiles ----------
-  let catDraft = [], catShowRemoved = false;
+  let catDraft = [], catShowRemoved = false, catOpen = null;
   function drawCats() {
     const el = $("cats-list"); el.innerHTML = "";
     // Tiles removed in an earlier save sit behind a toggle. One removed just now stays in place, as an undo.
@@ -1871,20 +1879,38 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
       const name = document.createElement("input");
       name.type = "text"; name.value = c.name; name.maxLength = 24; name.placeholder = "Pangalan"; name.setAttribute("aria-label", "Pangalan ng tile");
       name.addEventListener("input", () => { c.name = name.value; });
+      const toggle = document.createElement("button");
+      toggle.className = "btn";
+      if (c.hidden) {
+        toggle.textContent = "Ibalik";
+        toggle.addEventListener("click", () => { c.hidden = false; drawCats(); });
+        r.append(color, name, toggle);
+        el.appendChild(r);
+        return;
+      }
+      toggle.textContent = catOpen === c.id ? "Close" : "More";
+      toggle.setAttribute("aria-expanded", catOpen === c.id ? "true" : "false");
+      toggle.addEventListener("click", () => { catOpen = catOpen === c.id ? null : c.id; drawCats(); });
+      r.append(color, name, toggle);
+      el.appendChild(r);
+      if (catOpen !== c.id) return;
       const up = document.createElement("button");
-      up.className = "btn"; up.textContent = "↑"; let prev = i - 1;
+      up.className = "btn"; up.textContent = "↑ Itaas"; let prev = i - 1;
       while (prev >= 0 && !shown(catDraft[prev])) prev--;
       up.disabled = prev < 0; up.setAttribute("aria-label", "Itaas");
       up.addEventListener("click", () => { [catDraft[prev], catDraft[i]] = [catDraft[i], catDraft[prev]]; drawCats(); });
       const off = document.createElement("button");
-      off.className = "btn"; off.textContent = c.hidden ? "Ibalik" : "Remove";
-      off.addEventListener("click", () => { c.hidden = !c.hidden; drawCats(); });
+      off.className = "btn danger"; off.textContent = "Remove";
+      off.addEventListener("click", () => { c.hidden = true; catOpen = null; drawCats(); });
       const subs = document.createElement("input");
       subs.type = "text"; subs.className = "cat-subs"; subs.value = subsOf(c).join(", ");
       subs.placeholder = "Sub-labels (optional): ano specifically?"; subs.setAttribute("aria-label", "Sub-labels");
       subs.addEventListener("input", () => { c.subs = subs.value.split(",").map(s => s.trim().slice(0, 24)).filter(Boolean).filter((s, n, a) => a.findIndex(x => x.toLowerCase() === s.toLowerCase()) === n).slice(0, 12); });
-      r.append(color, name, up, off, subs);
-      el.appendChild(r);
+      const more = document.createElement("div"); more.className = "cat-more";
+      const acts = document.createElement("div"); acts.className = "chips";
+      acts.append(up, off);
+      more.append(subs, acts);
+      r.appendChild(more);
     });
     const removed = catDraft.filter(c => c.wasHidden).length;
     const toggle = $("cats-removed");
@@ -1893,15 +1919,16 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
   }
   $("cats-edit").addEventListener("click", () => {
     catDraft = CATS.map(c => Object.assign({}, c, c.hidden ? { wasHidden: true } : {}));
-    catShowRemoved = false;
+    catShowRemoved = false; catOpen = null;
     $("cats-err").hidden = true;
     drawCats();
     $("cats-wrap").classList.add("show");
   });
   $("cats-add").addEventListener("click", () => {
-    catDraft.push({ id: uid(), name: "", c: "#4FB394", isNew: true });
+    const fresh = { id: uid(), name: "", c: "#4FB394", isNew: true };
+    catDraft.push(fresh); catOpen = fresh.id;
     drawCats();
-    const inputs = $("cats-list").querySelectorAll('input[type="text"]');
+    const inputs = $("cats-list").querySelectorAll('input[type="text"]:not(.cat-subs)');
     inputs[inputs.length - 1].focus();
   });
   const closeCats = () => $("cats-wrap").classList.remove("show");
@@ -1939,7 +1966,7 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
   });
 
   // ---------- tabs ----------
-  const tabs = { now: "view-now", gaps: "view-gaps", week: "view-week" };
+  const tabs = { now: "view-now", gaps: "view-gaps", week: "view-week", settings: "view-settings" };
   Object.keys(tabs).forEach(k => $("tab-" + k).addEventListener("click", () => {
     Object.keys(tabs).forEach(j => { $(tabs[j]).hidden = j !== k; $("tab-" + j).classList.toggle("on", j === k); });
     window.scrollTo(0, 0);
