@@ -1556,14 +1556,11 @@ nav.tabs .badge { position: absolute; top: 1px; left: calc(50% + 6px); min-width
     $("gap-time").textContent = fmtTime(g.start) + " – " + fmtTime(g.end);
     $("gap-sub").textContent = fmtDur(g.end - g.start) + ". Anong ganap dito?";
     const gt = $("gap-tiles"); gt.innerHTML = "";
-    shownCats().forEach(c => gt.appendChild(tileButton(c, () => {
-      addSession(c.id, g.start, g.end);
-      schedules.forEach(s => {
-        const w = s.cat !== c.id && schedSpan(s, g.start);
-        if (w && Math.min(g.end, w[1]) > Math.max(g.start, w[0])) addKas(s.cat, Math.max(g.start, w[0]), Math.min(g.end, w[1]));
-      });
-      render(); showToast(fmtDur(g.end - g.start) + " na " + c.name + ". Sakto, noted!", []);
-    }, false)));
+    shownCats().forEach(c => gt.appendChild(tileButton(c, () => openAddLog({
+      key, start: g.start, end: g.end, cat: c.id,
+      title: fmtTime(g.start) + " – " + fmtTime(g.end),
+      gap: { end: g.end, before: null, filled: 0 }
+    }), false)));
     $("gap-skip").onclick = () => { skipped.add(key + ":" + g.start); renderGaps(); };
   }
   // One plain sentence on top of Week, then progress for each goal.
@@ -2003,6 +2000,15 @@ nav.tabs .badge { position: absolute; top: 1px; left: calc(50% + 6px); min-width
       el.appendChild(b);
     });
   }
+  function openAddLog(o) {
+    addLog = { key: o.key, cat: o.cat || null, sub: null, start: o.start, end: o.end, gap: o.gap || null };
+    $("add-log-title").textContent = o.title || "Add log";
+    $("add-log-start").value = toHM(o.start);
+    $("add-log-end").value = toHM(o.end);
+    $("add-log-err").hidden = true;
+    drawAddLog();
+    $("add-log-wrap").classList.add("show");
+  }
   $("log-add").addEventListener("click", () => {
     const now = Date.now(), today = keyOf(now), key = viewDay && viewDay < today ? viewDay : today;
     if (!dayReady(key)) return;
@@ -2010,14 +2016,14 @@ nav.tabs .badge { position: absolute; top: 1px; left: calc(50% + 6px); min-width
     // Starts where the last log ended, since that's usually where the missing part is.
     const start = list.length ? list[list.length - 1].end : Math.max(d0, Math.min(now, d0 + DAY) - 30 * MIN);
     const limit = current && key === today ? Math.min(now, current.start) : Math.min(now, d0 + DAY - MIN);
-    addLog = { key, cat: null, sub: null };
-    $("add-log-start").value = toHM(Math.min(start, limit));
-    $("add-log-end").value = toHM(limit);
-    $("add-log-err").hidden = true;
-    drawAddLog();
-    $("add-log-wrap").classList.add("show");
+    openAddLog({ key, start: Math.min(start, limit), end: limit });
   });
-  const closeAddLog = () => { $("add-log-wrap").classList.remove("show"); addLog = null; };
+  // Stopping partway through a gap keeps what's been added, and Undo can still take it all back.
+  function closeAddLog() {
+    const gap = addLog && addLog.gap;
+    $("add-log-wrap").classList.remove("show"); addLog = null;
+    if (gap && gap.filled) { render(); showUndo("Goods, nadagdag na.", () => restoreLogs(gap.before)); }
+  }
   $("add-log-cancel").addEventListener("click", closeAddLog);
   $("add-log-wrap").addEventListener("click", e => { if (e.target.id === "add-log-wrap") closeAddLog(); });
   $("add-log-save").addEventListener("click", () => {
@@ -2026,15 +2032,34 @@ nav.tabs .badge { position: absolute; top: 1px; left: calc(50% + 6px); min-width
     if (!$("add-log-start").value || !$("add-log-end").value) { fail("Lagyan muna ng oras pareho."); return; }
     const d0 = midnight(new Date(addLog.key.replace(/-/g, "/")).getTime());
     const at = hm => { const [h, m] = hm.split(":").map(Number); return new Date(d0).setHours(h, m, 0, 0); };
-    const ns = at($("add-log-start").value), ne = $("add-log-end").value === "00:00" ? d0 + DAY : at($("add-log-end").value);
+    // An untouched field keeps its exact time, so it still lines up with the log next to it.
+    const ns = $("add-log-start").value === toHM(addLog.start) ? addLog.start : at($("add-log-start").value);
+    const ne = $("add-log-end").value === toHM(addLog.end) ? addLog.end : ($("add-log-end").value === "00:00" ? d0 + DAY : at($("add-log-end").value));
     if (ne - ns < MIN) { fail("Dapat mas maaga ang start kaysa sa end."); return; }
     if (ne > Date.now() + MIN) { fail("Time traveler ka? Di pa nangyayari 'yan."); return; }
     if (current && ne > current.start) { fail("Sumasabit 'yan sa ginagawa mo ngayon. Stop mo muna, or i-edit ang start noon."); return; }
     const logged = (days[addLog.key] || []).reduce((a, v) => a + overlapMs(v, { start: ns, end: ne }), 0);
     if (logged >= MIN && !confirm("Mapapalitan nito ang " + fmtDur(logged) + " na naka-log na. Sure ka?")) return;
-    const before = snapshotLogs(ns, ne);
-    addSession(addLog.cat, ns, ne, addLog.sub || undefined);
-    closeAddLog(); render();
+    const gap = addLog.gap, cat = addLog.cat, key = addLog.key;
+    const before = snapshotLogs(gap ? Math.min(ns, addLog.start) : ns, gap ? Math.max(ne, gap.end) : ne);
+    if (gap && !gap.before) gap.before = before;
+    addSession(cat, ns, ne, addLog.sub || undefined);
+    if (gap) {
+      gap.filled += ne - ns;
+      schedules.forEach(s => {   // same as logging it live: fixed hours run alongside as Kasabay
+        const w = s.cat !== cat && schedSpan(s, ns);
+        if (w && Math.min(ne, w[1]) > Math.max(ns, w[0])) addKas(s.cat, Math.max(ns, w[0]), Math.min(ne, w[1]));
+      });
+      if (gap.end - ne >= MIN) {   // something's left, so ask about the rest right away: Jeep, then Lakad
+        render();
+        openAddLog({ key, start: ne, end: gap.end, cat, gap, title: "May natira pang " + fmtDur(gap.end - ne) });
+        return;
+      }
+      $("add-log-wrap").classList.remove("show"); addLog = null; render();
+      showUndo(fmtDur(gap.filled) + " na " + CAT[cat].name + ". Sakto, noted!", () => restoreLogs(gap.before));
+      return;
+    }
+    $("add-log-wrap").classList.remove("show"); addLog = null; render();
     showUndo("Goods, nadagdag na.", () => restoreLogs(before));
   });
 
