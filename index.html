@@ -172,11 +172,18 @@ header.top .date { color: var(--ink-soft); font-size: 13px; font-weight: 600; }
 
 /* Tabs: a capsule floating over the content. The glass itself is in the Glass block below. */
 nav.tabs { position: fixed; left: 0; right: 0; bottom: max(10px, env(safe-area-inset-bottom)); display: flex; justify-content: center; padding: 0 16px; z-index: 10; pointer-events: none; }
-nav.tabs .in { display: flex; width: min(420px, 100%); padding: 5px; border-radius: 30px; pointer-events: auto; background: var(--surface); box-shadow: 0 8px 24px rgba(0,0,0,.18); }
+nav.tabs .in { position: relative; display: flex; width: min(420px, 100%); padding: 5px; border-radius: 30px; overflow: hidden; pointer-events: auto; background: var(--surface); box-shadow: 0 8px 24px rgba(0,0,0,.18); transition: scale .3s cubic-bezier(.3, 1.6, .5, 1); }
+nav.tabs .in:has(button:active) { scale: 1.02; }
+/* One highlight slides between the tabs like a drop of glass: it overshoots a bit and stretches as it moves. */
+.tab-glass { position: absolute; top: 5px; bottom: 5px; left: 5px; width: calc((100% - 10px) / 4); border-radius: 25px; background: var(--fill);
+  box-shadow: inset 0 0 0 .5px var(--glass-edge), inset 0 1px 0 var(--glass-top); translate: calc(var(--i, 0) * 100%) 0; transition: translate .45s cubic-bezier(.3, 1.25, .4, 1); pointer-events: none; }
+.tab-glass.squish { animation: squish .45s ease-out; }
+nav.tabs button.on svg { animation: tab-icon .4s cubic-bezier(.3, 1.6, .5, 1); }
 nav.tabs button { flex: 1; appearance: none; border: 0; background: transparent; color: var(--ink-soft); display: flex; flex-direction: column; align-items: center; gap: 1px;
-  font: 500 11px var(--body); padding: 5px 4px 4px; border-radius: 25px; cursor: pointer; position: relative; transition: background-color .2s ease, color .2s ease; }
+  font: 500 11px var(--body); padding: 5px 4px 4px; border-radius: 25px; cursor: pointer; position: relative; z-index: 1; transition: color .2s ease; }
+nav.tabs button:focus-visible { outline-offset: -3px; }
 nav.tabs svg { width: 24px; height: 24px; display: block; }
-nav.tabs button.on { color: var(--accent); background: var(--fill); }
+nav.tabs button.on { color: var(--accent); }
 nav.tabs .badge { position: absolute; top: 1px; left: calc(50% + 6px); min-width: 17px; padding: 0 5px; border-radius: 9px; background: #FF3B30; color: #fff; font-size: 11px; font-weight: 600; line-height: 17px; }
 /* Glass, for things floating over the content only. Tiles and cards stay solid so their colors and numbers stay easy to read.
    A web app can't get iOS's real Liquid Glass, so this is the close version: blur, some see-through, and a lit top edge.
@@ -277,6 +284,8 @@ nav.tabs .badge { position: absolute; top: 1px; left: calc(50% + 6px); min-width
 @keyframes lift-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes reveal { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
+@keyframes squish { 0% { scale: 1 1; } 35% { scale: 1.22 .86; } 70% { scale: .96 1.04; } 100% { scale: 1 1; } }
+@keyframes tab-icon { 0% { scale: .8; } 60% { scale: 1.1; } 100% { scale: 1; } }
 @keyframes slide-up { from { transform: translateY(100%); } to { transform: none; } }
 @keyframes toast-in { from { opacity: 0; transform: translate(-50%, 10px); } to { opacity: 1; transform: translate(-50%, 0); } }
 .view { animation: fade-in .16s ease-out; }
@@ -622,6 +631,7 @@ nav.tabs .badge { position: absolute; top: 1px; left: calc(50% + 6px); min-width
 </div>
 
 <nav class="tabs" id="tabs" hidden><div class="in">
+  <span class="tab-glass" id="tab-glass" aria-hidden="true"></span>
   <button id="tab-now" class="on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg>Ngayon</button>
   <button id="tab-gaps"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke-dasharray="3.2 3.6"/></svg>Gaps<span class="badge" id="gap-badge" hidden></span></button>
   <button id="tab-week"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 20v-6M12 20V5M19 20v-10"/></svg>Week</button>
@@ -2312,7 +2322,11 @@ nav.tabs .badge { position: absolute; top: 1px; left: calc(50% + 6px); min-width
   // ---------- tabs ----------
   const tabs = { now: "view-now", gaps: "view-gaps", week: "view-week", settings: "view-settings" };
   let sweepTimer = null;
-  Object.keys(tabs).forEach(k => $("tab-" + k).addEventListener("click", () => {
+  Object.keys(tabs).forEach((k, i) => $("tab-" + k).addEventListener("click", () => {
+    if ($(tabs[k]).hidden) {
+      $("tab-glass").style.setProperty("--i", i);
+      playOnce($("tab-glass"), "squish");
+    }
     if (k === "week" && $("view-week").hidden) {
       $("view-week").classList.add("sweep");
       clearTimeout(sweepTimer);
