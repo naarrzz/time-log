@@ -1524,7 +1524,7 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
     $("quiz").scrollTop = 0;
   }
   function openQuiz() {
-    quiz = { step: 0, roles: [], tiles: [], custom: [], touched: false, schedCat: null, schedDays: [1, 2, 3, 4, 5], schedStart: "09:00", schedEnd: "18:00" };
+    quiz = { step: 0, roles: [], tiles: [], custom: [], offered: [], schedCat: null, schedDays: [1, 2, 3, 4, 5], schedStart: "09:00", schedEnd: "18:00" };
     drawQuiz();
     $("quiz").hidden = false;
   }
@@ -1549,10 +1549,12 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
   $("quiz-next").addEventListener("click", () => {
     const fail = text => { $("quiz-err").textContent = text; $("quiz-err").hidden = false; };
     if (quiz.step === 0) {
-      // Fill in the tiles once. Coming back later keeps whatever was already picked or removed.
-      const suggested = quizSuggested().concat(QUIZ_ALWAYS);
-      if (!quiz.touched) { quiz.tiles = suggested; quiz.touched = true; }
-      else suggested.forEach(id => { if (!quiz.tiles.includes(id)) quiz.tiles.push(id); });
+      // Each suggestion is offered once, so coming back doesn't undo a tile they removed.
+      quizSuggested().concat(QUIZ_ALWAYS).forEach(id => {
+        if (quiz.offered.includes(id)) return;
+        quiz.offered.push(id);
+        if (!quiz.tiles.includes(id)) quiz.tiles.push(id);
+      });
     }
     if (quiz.step === 1 && !quiz.tiles.length) { fail("Pili kahit isa."); return; }
     if (quiz.step === 2) {
