@@ -769,7 +769,14 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
     "content": ["Script", "Shoot", "Edit", "Post"],
     "side projects": ["Coding", "Planning"],
     "org": ["Meeting", "Event"],
-    "scroll": ["TikTok", "IG", "FB", "YouTube"]
+    "scroll": ["TikTok", "IG", "FB", "YouTube"],
+    "clients": ["Calls", "Project work", "Invoices"],
+    "negosyo": ["Orders", "Inventory", "Accounting"],
+    "family": ["Kids", "Bonding", "Errands"],
+    "chores": ["Linis", "Laba", "Luto"],
+    "hobby": ["Games", "Music", "Reading"],
+    "friends": ["Hangout", "Call"],
+    "faith": ["Church", "Prayer", "Bible study"]
   };
   const subsOf = c => !c ? [] : Array.isArray(c.subs) ? c.subs : (SUB_SUGGEST[c.name.toLowerCase()] || []);
   // Labeling an unlabeled log covers the whole log. Changing to another label starts a new stretch from now,
@@ -1663,7 +1670,7 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
       body.appendChild(group);
     } else {
       $("quiz-title").textContent = "May fixed na oras ka ba?";
-      $("quiz-sub").textContent = "Gaya ng trabaho o klase. Kusa itong magiging Kasabay sa mga oras na 'yon. Optional lang, at puwedeng dagdagan sa Week.";
+      $("quiz-sub").textContent = "Gaya ng trabaho o klase. Kusa itong magiging Kasabay sa mga oras na 'yon. Optional lang, at pwedeng dagdagan sa Week tab.";
       $("quiz-next").textContent = "Let's go";
       const group = document.createElement("div"); group.className = "quiz-group";
       quizChips(group, quiz.tiles.map(id => ({ id, label: quizLabel(id) })), id => quiz.schedCat === id, id => { quiz.schedCat = quiz.schedCat === id ? null : id; });
@@ -1777,7 +1784,7 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
       off.addEventListener("click", () => { c.hidden = !c.hidden; drawCats(); });
       const subs = document.createElement("input");
       subs.type = "text"; subs.className = "cat-subs"; subs.value = subsOf(c).join(", ");
-      subs.placeholder = "Sub-labels (optional): Car, Jeep"; subs.setAttribute("aria-label", "Sub-labels");
+      subs.placeholder = "Sub-labels (optional): ano specifically?"; subs.setAttribute("aria-label", "Sub-labels");
       subs.addEventListener("input", () => { c.subs = subs.value.split(",").map(s => s.trim().slice(0, 24)).filter(Boolean).filter((s, n, a) => a.findIndex(x => x.toLowerCase() === s.toLowerCase()) === n).slice(0, 12); });
       r.append(color, name, up, off, subs);
       el.appendChild(r);
