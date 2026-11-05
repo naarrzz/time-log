@@ -760,7 +760,16 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
     "morning routine": ["Prep food", "Ligo", "Coffee"],
     "kain": ["Breakfast", "Lunch", "Dinner", "Snack"],
     "tulog/pahinga": ["Tulog", "Nap", "Pahinga"],
-    "gym": ["Push", "Pull", "Legs", "Cardio"]
+    "gym": ["Push", "Pull", "Legs", "Cardio"],
+    "school": ["Class", "Assignment", "Thesis", "Exam"],
+    "review": ["Reading", "Practice test", "Notes"],
+    "internship": ["Tickets", "Meeting", "Deep work"],
+    "work": ["Tickets", "Meeting", "Deep work"],
+    "coaching": ["Check-ins", "Programming", "Calls"],
+    "content": ["Script", "Shoot", "Edit", "Post"],
+    "side projects": ["Coding", "Planning"],
+    "org": ["Meeting", "Event"],
+    "scroll": ["TikTok", "IG", "FB", "YouTube"]
   };
   const subsOf = c => !c ? [] : Array.isArray(c.subs) ? c.subs : (SUB_SUGGEST[c.name.toLowerCase()] || []);
   // Labeling an unlabeled log covers the whole log. Changing to another label starts a new stretch from now,
@@ -778,12 +787,11 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
   }
   function drawLiveSubs() {
     const el = $("live-subs"), subs = subsOf(CAT[current.cat]);
-    el.hidden = !subs.length;
+    el.hidden = false;      // every tile can be specific; one with no labels yet just offers + Add
     const sig = [current.cat, subs.join("|"), current.sub || "", subAdding].join("~");
     if (sig === liveSubSig) return;     // an open text box survives re-renders
     liveSubSig = sig;
     el.innerHTML = "";
-    if (!subs.length) return;
     const lbl = document.createElement("span"); lbl.className = "lbl"; lbl.textContent = "Specifically:";
     el.appendChild(lbl);
     if (subAdding) {
@@ -813,7 +821,7 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
       b.addEventListener("click", () => pickSub(s));
       el.appendChild(b);
     });
-    const more = document.createElement("button"); more.className = "btn"; more.textContent = "+"; more.setAttribute("aria-label", "Dagdag na sub-label");
+    const more = document.createElement("button"); more.className = "btn"; more.textContent = subs.length ? "+" : "+ Add"; more.setAttribute("aria-label", "Dagdag na sub-label");
     more.addEventListener("click", () => { subAdding = true; render(); });
     el.appendChild(more);
   }
