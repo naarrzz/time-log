@@ -181,6 +181,15 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
 .kas-head .s { color: var(--ink-soft); font-size: 13px; }
 .kas-head .v { font-variant-numeric: tabular-nums; font-weight: 600; }
 .kas-edit { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
+/* First-run quiz */
+.quiz { position: fixed; inset: 0; z-index: 40; background: var(--bg); overflow: auto; padding: calc(20px + env(safe-area-inset-top)) 16px calc(24px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 14px; animation: fade-in .2s ease-out; }
+.quiz > * { width: 100%; max-width: 520px; margin-left: auto; margin-right: auto; }
+.quiz-top { display: flex; justify-content: space-between; align-items: center; }
+.quiz h1 { font-family: var(--display); font-size: 27px; line-height: 1.15; margin: 0; }
+.quiz-actions { justify-content: flex-end; padding-top: 4px; }
+.quiz-group { display: flex; flex-direction: column; gap: 12px; }
+.quiz-add { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
+.quiz-add input { font: 16px var(--body); color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; min-width: 0; }
 /* Edit tiles */
 .cat-row { display: grid; grid-template-columns: 40px 1fr 40px auto; gap: 8px; align-items: center; }
 .cat-row.off input { opacity: .4; }
@@ -213,6 +222,21 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
 </style>
 </head>
 <body>
+<main class="quiz" id="quiz" hidden>
+  <div class="quiz-top">
+    <span class="sync" id="quiz-step"></span>
+    <button class="btn" id="quiz-skip">Skip</button>
+  </div>
+  <h1 id="quiz-title"></h1>
+  <p class="empty" id="quiz-sub"></p>
+  <div id="quiz-body"></div>
+  <p class="sync warn" id="quiz-err" role="alert" style="margin:0" hidden></p>
+  <div class="chips quiz-actions">
+    <button class="btn" id="quiz-back">Back</button>
+    <button class="btn primary" id="quiz-next"></button>
+  </div>
+</main>
+
 <main class="login" id="login" hidden>
   <h1>Time Log</h1>
   <p class="empty">Login muna, para synced yung logs mo on any device.</p>
@@ -494,7 +518,7 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
     messagingSenderId: "217558064160",
     appId: "1:217558064160:web:0af8dd7403f4db65b4b045"
   };
-  let auth = null, db = null, root = "", mode = "loading";
+  let auth = null, db = null, root = "", mode = "loading", quizChecked = false;
   function localSave() {
     try { localStorage.setItem("oraslog", JSON.stringify({ current, days, kasabay: kasDays, cats: CATS, schedules })); } catch (e) {}
   }
@@ -1375,6 +1399,148 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
     showToast("Goods, saved. Sa next tap mo ito magsisimula.", []);
   });
 
+  // ---------- first-run quiz ----------
+  // Three short steps: who you are, your tiles, an optional fixed schedule. Skip works from anywhere.
+  const QUIZ_TILES = {
+    work: ["Work", "#2F6FBF"], school: ["School", "#7A4FC9"], review: ["Review", "#C2437A"], org: ["Org", "#9C6B3F"],
+    clients: ["Clients", "#1F8A6B"], negosyo: ["Negosyo", "#0F8F86"], family: ["Family", "#D9739A"], gym: ["Gym", "#C9A227"],
+    content: ["Content", "#E0682B"], side: ["Side projects", "#3AA0B8"], routine: ["Morning routine", "#5FB8A0"],
+    chores: ["Chores", "#8A7F6D"], hobby: ["Hobby", "#A05FC0"], friends: ["Friends", "#E39A3B"], faith: ["Faith", "#6D7FD6"],
+    biyahe: ["Biyahe", "#7C8A93"], kain: ["Kain", "#8DB255"], scroll: ["Scroll", "#D14B4B"], tulog: ["Tulog/Pahinga", "#3E4A7A"]
+  };
+  const QUIZ_ROLES = [
+    { id: "student", label: "Student", tiles: ["school", "review", "org"] },
+    { id: "working", label: "Working", tiles: ["work"] },
+    { id: "freelance", label: "Freelance o side hustle", tiles: ["clients", "side"] },
+    { id: "owner", label: "May negosyo", tiles: ["negosyo"] },
+    { id: "parent", label: "Parent", tiles: ["family", "chores"] },
+    { id: "fit", label: "Gym rat", tiles: ["gym"] },
+    { id: "creator", label: "Content creator", tiles: ["content"] }
+  ];
+  const QUIZ_ALWAYS = ["biyahe", "kain", "scroll", "tulog"];       // almost everyone's day has these
+  const QUIZ_SKIP_TILES = ["work", "school", "gym", "biyahe", "kain", "scroll", "tulog"];
+  let quiz = null;
+  function quizChips(el, items, isOn, onTap) {
+    const box = document.createElement("div"); box.className = "chips";
+    items.forEach(it => {
+      const b = document.createElement("button");
+      b.className = "btn tag plain"; b.textContent = it.label;
+      b.setAttribute("aria-pressed", isOn(it.id) ? "true" : "false");
+      b.addEventListener("click", () => { onTap(it.id); drawQuiz(); });
+      box.appendChild(b);
+    });
+    el.appendChild(box);
+  }
+  const quizLabel = id => QUIZ_TILES[id] ? QUIZ_TILES[id][0] : (quiz.custom.find(c => c.id === id) || {}).name;
+  function quizSuggested() {
+    const out = [];
+    quiz.roles.forEach(r => QUIZ_ROLES.find(x => x.id === r).tiles.forEach(id => { if (!out.includes(id)) out.push(id); }));
+    return out;
+  }
+  function drawQuiz() {
+    const body = $("quiz-body"); body.innerHTML = "";
+    $("quiz-err").hidden = true;
+    $("quiz-step").textContent = (quiz.step + 1) + " of 3";
+    $("quiz-back").hidden = quiz.step === 0;
+    if (quiz.step === 0) {
+      $("quiz-title").textContent = "Uy! So, anong ganap mo sa life ngayon?";
+      $("quiz-sub").textContent = "Pili lahat ng swak. Dito natin ibabase ang tiles mo.";
+      $("quiz-next").textContent = "Next";
+      quizChips(body, QUIZ_ROLES, id => quiz.roles.includes(id), id => {
+        quiz.roles = quiz.roles.includes(id) ? quiz.roles.filter(x => x !== id) : quiz.roles.concat([id]);
+      });
+    } else if (quiz.step === 1) {
+      $("quiz-title").textContent = "Saan napupunta oras mo?";
+      $("quiz-sub").textContent = "Naka-pili na ang mga malamang. Tap para dagdagan o tanggalin.";
+      $("quiz-next").textContent = "Next";
+      const all = quizSuggested().concat(QUIZ_ALWAYS);
+      Object.keys(QUIZ_TILES).forEach(id => { if (!all.includes(id)) all.push(id); });
+      quiz.custom.forEach(c => all.push(c.id));
+      const group = document.createElement("div"); group.className = "quiz-group";
+      quizChips(group, all.map(id => ({ id, label: quizLabel(id) })), id => quiz.tiles.includes(id), id => {
+        quiz.tiles = quiz.tiles.includes(id) ? quiz.tiles.filter(x => x !== id) : quiz.tiles.concat([id]);
+      });
+      const add = document.createElement("div"); add.className = "quiz-add";
+      const input = document.createElement("input"); input.type = "text"; input.maxLength = 24; input.placeholder = "May nakalimutan? Type mo dito"; input.setAttribute("aria-label", "Ibang tile");
+      const addBtn = document.createElement("button"); addBtn.className = "btn"; addBtn.textContent = "Add";
+      const addCustom = () => {
+        const name = input.value.trim(); if (!name) return;
+        const known = all.find(id => quizLabel(id).toLowerCase() === name.toLowerCase());
+        if (known) { if (!quiz.tiles.includes(known)) quiz.tiles.push(known); }
+        else { const id = uid(); quiz.custom.push({ id, name }); quiz.tiles.push(id); }
+        drawQuiz();
+      };
+      addBtn.addEventListener("click", addCustom);
+      input.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); addCustom(); } });
+      add.append(input, addBtn);
+      group.appendChild(add);
+      body.appendChild(group);
+    } else {
+      $("quiz-title").textContent = "May fixed na oras ka ba?";
+      $("quiz-sub").textContent = "Gaya ng trabaho o klase. Kusa itong magiging Kasabay sa mga oras na 'yon. Optional lang, at puwedeng dagdagan sa Week.";
+      $("quiz-next").textContent = "Let's go";
+      const group = document.createElement("div"); group.className = "quiz-group";
+      quizChips(group, quiz.tiles.map(id => ({ id, label: quizLabel(id) })), id => quiz.schedCat === id, id => { quiz.schedCat = quiz.schedCat === id ? null : id; });
+      if (quiz.schedCat) {
+        quizChips(group, [1, 2, 3, 4, 5, 6, 0].map(i => ({ id: i, label: DOW[i] })), i => quiz.schedDays.includes(i), i => {
+          quiz.schedDays = quiz.schedDays.includes(i) ? quiz.schedDays.filter(x => x !== i) : quiz.schedDays.concat([i]);
+        });
+        const times = document.createElement("div"); times.className = "time-row";
+        [["Start", "schedStart"], ["End", "schedEnd"]].forEach(([label, key]) => {
+          const l = document.createElement("label"); l.textContent = label + " ";
+          const i = document.createElement("input"); i.type = "time"; i.value = quiz[key];
+          i.addEventListener("input", () => { quiz[key] = i.value; });
+          l.appendChild(i); times.appendChild(l);
+        });
+        group.appendChild(times);
+      }
+      body.appendChild(group);
+    }
+    $("quiz").scrollTop = 0;
+  }
+  function openQuiz() {
+    quiz = { step: 0, roles: [], tiles: [], custom: [], touched: false, schedCat: null, schedDays: [1, 2, 3, 4, 5], schedStart: "09:00", schedEnd: "18:00" };
+    drawQuiz();
+    $("quiz").hidden = false;
+  }
+  function finishQuiz(ids) {
+    const list = ids.map(id => {
+      const known = QUIZ_TILES[id];
+      if (known) return { id, name: known[0], c: known[1] };
+      const c = quiz.custom.find(x => x.id === id);
+      return { id, name: c.name, c: NEW_QUIZ_COLOR };
+    });
+    setCats(list); saveCats();
+    if (quiz.schedCat && ids.includes(quiz.schedCat)) {
+      schedules = schedules.concat([{ id: uid(), cat: quiz.schedCat, days: quiz.schedDays, start: quiz.schedStart, end: quiz.schedEnd }]);
+      saveSchedules();
+    }
+    $("quiz").hidden = true; quiz = null;
+    render();
+  }
+  const NEW_QUIZ_COLOR = "#4FB394";
+  $("quiz-skip").addEventListener("click", () => finishQuiz(QUIZ_SKIP_TILES));
+  $("quiz-back").addEventListener("click", () => { quiz.step--; drawQuiz(); });
+  $("quiz-next").addEventListener("click", () => {
+    const fail = text => { $("quiz-err").textContent = text; $("quiz-err").hidden = false; };
+    if (quiz.step === 0) {
+      // Fill in the tiles once. Coming back later keeps whatever was already picked or removed.
+      const suggested = quizSuggested().concat(QUIZ_ALWAYS);
+      if (!quiz.touched) { quiz.tiles = suggested; quiz.touched = true; }
+      else suggested.forEach(id => { if (!quiz.tiles.includes(id)) quiz.tiles.push(id); });
+    }
+    if (quiz.step === 1 && !quiz.tiles.length) { fail("Pili kahit isa."); return; }
+    if (quiz.step === 2) {
+      if (quiz.schedCat) {
+        if (!quiz.schedDays.length) { fail("Pili kahit isang araw."); return; }
+        if (!quiz.schedStart || !quiz.schedEnd || quiz.schedEnd <= quiz.schedStart) { fail("Dapat mas maaga ang start kaysa sa end."); return; }
+      }
+      finishQuiz(quiz.tiles);
+      return;
+    }
+    quiz.step++; drawQuiz();
+  });
+
   // ---------- edit tiles ----------
   let catDraft = [];
   function drawCats() {
@@ -1473,6 +1639,7 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
     // Same rule as accounts: existing no-account logs keep the old internship schedule, new ones start empty.
     try { const o = hadLocal ? JSON.parse(localStorage.getItem("oraslog")) : null; if (o && !o.schedules && Object.keys(o.days || {}).length) schedules = [{ id: uid(), cat: "intern", days: [1, 2, 3, 4, 5], start: "09:00", end: "18:00", until: "2026-11-13" }]; } catch (e) {}
     showApp(); render();
+    if (!hadLocal) openQuiz();
     setSync("Naka-save lang sa browser na 'to. Mag-login para ma-sync.", true);
     $("acct-who").textContent = "Walang account. Nasa browser na 'to lang ang logs mo.";
     $("signout-btn").textContent = "Bumalik sa login";
@@ -1512,6 +1679,10 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
     db.doc(root + "/state/categories").onSnapshot(live, snap => {
       const b = snap.exists ? snap.data() : null;
       if (b && Array.isArray(b.list) && b.list.length) setCats(b.list);
+      if (!b && !snap.metadata.fromCache && !quizChecked) {
+        quizChecked = true;
+        db.collection(root + "/days").limit(1).get({ source: "server" }).then(q => { if (q.empty && !current) openQuiz(); }).catch(() => { quizChecked = false; });
+      }
       syncMeta.cats = snap.metadata; showSync();
       render();
     }, onListenError);
