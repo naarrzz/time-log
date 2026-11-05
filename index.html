@@ -408,7 +408,7 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
         <div class="chips" style="margin-top:10px"><button class="btn" id="sched-add">+ Add schedule</button></div>
       </div>
       <div class="card">
-        <h2>Itsura</h2>
+        <h2>Looks</h2>
         <div class="seg" id="theme-seg" role="group" aria-label="Theme">
           <button data-theme-pick="auto">Auto</button>
           <button data-theme-pick="light">Light</button>
@@ -417,13 +417,18 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
         </div>
       </div>
       <div class="card">
-        <h2>Data mo</h2>
-        <p class="empty" id="acct-who" style="margin-bottom:12px"></p>
+        <h2>Data</h2>
         <div class="chips">
-          <button class="btn" id="export-btn">Backup muna</button>
-          <button class="btn" id="signout-btn">Sign out</button>
+          <button class="btn" id="export-btn">Backup</button>
+          <button class="btn" id="restore-btn">Restore</button>
           <button class="btn danger" id="reset-btn">Reset logs</button>
         </div>
+        <input type="file" id="restore-file" accept=".json,application/json" hidden>
+      </div>
+      <div class="card">
+        <h2>Account</h2>
+        <p class="empty" id="acct-who" style="margin-bottom:12px"></p>
+        <div class="chips"><button class="btn" id="signout-btn">Sign out</button></div>
       </div>
     </div>
   </section>
@@ -486,6 +491,18 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
       <button class="btn" id="cats-add">+ Add tile</button>
       <button class="btn" id="cats-cancel">Cancel</button>
       <button class="btn primary" id="cats-save">Save</button>
+    </div>
+  </div>
+</div>
+
+<div class="sheet-wrap center" id="restore-wrap">
+  <div class="sheet" role="alertdialog" aria-modal="true" aria-labelledby="restore-title" aria-describedby="restore-text">
+    <h3 id="restore-title">Restore backup?</h3>
+    <p id="restore-text"></p>
+    <p class="sync warn" id="restore-err" role="alert" style="margin:0" hidden></p>
+    <div class="chips">
+      <button class="btn" id="restore-no" type="button">Nvm</button>
+      <button class="btn primary" id="restore-yes" type="button">Restore</button>
     </div>
   </div>
 </div>
@@ -2418,7 +2435,7 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
     } else {
       Object.keys(days).forEach(k => { all[k] = { sessions: days[k], kasabay: kasDays[k] || [] }; });
     }
-    const text = JSON.stringify({ exportedAt: new Date().toISOString(), categories: CATS, current, days: all }, null, 2);
+    const text = JSON.stringify({ exportedAt: new Date().toISOString(), categories: CATS, goals, schedules, current, days: all }, null, 2);
     const name = "time-log-backup-" + keyOf(Date.now()) + ".json";
     const file = new File([text], name, { type: "application/json" });
     if (navigator.canShare && navigator.canShare({ files: [file] })) {
@@ -2434,14 +2451,112 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
     exportData().catch(() => showToast("Di na-download ang backup. Try ulit?", []));
   });
 
+  // Reset and restore both need the full list of days from the server. Older days aren't in the device's cache.
+  function needFreshData(nothingChanged) {
+    const meta = Object.values(syncMeta);
+    if (meta.some(m => m.fromCache)) throw { plain: "Kailangan ng internet para dito. " + nothingChanged };
+    if (meta.some(m => m.hasPendingWrites)) throw { plain: "May nagsi-sync pa. Try ulit in a bit. " + nothingChanged };
+  }
+
+  // ---------- restore ----------
+  // Turns a backup file into clean data. Throws on anything that isn't a backup, before anything changes.
+  function parseBackup(text) {
+    const o = JSON.parse(text);
+    const taken = o && new Date(o.exportedAt).getTime();
+    if (!o || !taken || !o.days || typeof o.days !== "object" || Array.isArray(o.days)) throw new Error("not a backup");
+    const cleanLog = x => {
+      if (!x || typeof x.cat !== "string" || !Number.isFinite(x.start) || !Number.isFinite(x.end)) throw new Error("bad log");
+      const log = { id: typeof x.id === "string" ? x.id : uid(), c: createdOf(x), cat: x.cat, start: x.start, end: x.end };
+      if (typeof x.sub === "string") log.sub = x.sub;
+      if (Array.isArray(x.tags)) log.tags = x.tags;   // very old logs, converted to Kasabay by normalizeDay
+      return log;
+    };
+    const days = {}; let logs = 0;
+    Object.entries(o.days).forEach(([key, d]) => {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(key) || !d || !Array.isArray(d.sessions)) throw new Error("bad day");
+      const sessions = d.sessions.map(cleanLog).filter(x => x.end > x.start);
+      const kasabay = (Array.isArray(d.kasabay) ? d.kasabay : []).map(cleanLog).filter(x => x.end > x.start);
+      if (sessions.length || kasabay.length) { days[key] = { sessions, kasabay }; logs += sessions.length; }
+    });
+    const list = (v, ok) => (Array.isArray(v) ? v : []).filter(x => x && typeof x.id === "string" && ok(x));
+    return {
+      taken, days, logs,
+      cats: list(o.categories, c => typeof c.name === "string" && c.name).map(c => {
+        const t = { id: c.id, name: c.name, c: /^#[0-9a-f]{3,8}$/i.test(c.c) ? c.c : "#999999" };
+        if (c.hidden) t.hidden = true;
+        if (Array.isArray(c.subs)) t.subs = c.subs.filter(x => typeof x === "string");
+        return t;
+      }),
+      goals: list(o.goals, g => typeof g.cat === "string" && g.hours > 0),
+      schedules: list(o.schedules, x => typeof x.cat === "string" && Array.isArray(x.days) && typeof x.start === "string" && typeof x.end === "string")
+    };
+  }
+  // Adds the backup to what's here and never removes anything. If two logs overlap, the newest one wins, as usual.
+  async function restoreBackup(b) {
+    if (mode === "db") {
+      needFreshData("Walang nabago.");
+      const snap = await db.collection(root + "/days").get({ source: "server" });
+      snap.forEach(d => {
+        const x = d.data();
+        if (x && Array.isArray(x.sessions)) { days[d.id] = x.sessions.slice(); kasDays[d.id] = (x.kasabay || []).slice(); dayState[d.id] = "done"; }
+      });
+    }
+    const shape = key => JSON.stringify([days[key] || [], kasDays[key] || []].map(l => mergeAdjacent(l).map(x => [x.cat, x.sub || "", x.start, x.end])));
+    const notIn = (have, list) => { const ids = new Set(have.map(x => x.id)); return list.filter(x => !ids.has(x.id)); };
+    let changed = 0;
+    Object.keys(b.days).forEach(key => {
+      const before = shape(key);
+      days[key] = (days[key] || []).concat(notIn(days[key] || [], b.days[key].sessions));
+      kasDays[key] = (kasDays[key] || []).concat(notIn(kasDays[key] || [], b.days[key].kasabay));
+      normalizeDay(key);
+      if (mode === "db") dayState[key] = "done";
+      if (shape(key) !== before) { saveDay(key); changed++; }
+    });
+    // Tiles the backup has and this account doesn't, so its logs keep their name and color. Yours stay as they are.
+    const missing = b.cats.filter(c => !CAT[c.id]);
+    if (missing.length) { setCats(CATS.concat(missing)); saveCats(); }
+    // Goals and schedule only fill in if you have none, so they can't undo your changes since the backup.
+    if (!goals.length && b.goals.length) { goals = b.goals; saveGoals(); }
+    if (!schedules.length && b.schedules.length) { schedules = b.schedules; saveSchedules(); }
+    return changed;
+  }
+  let restoring = null;
+  const closeRestore = () => { $("restore-wrap").classList.remove("show"); restoring = null; };
+  $("restore-btn").addEventListener("click", () => $("restore-file").click());
+  $("restore-file").addEventListener("change", async e => {
+    const file = e.target.files[0];
+    e.target.value = "";   // so picking the same file again still fires
+    if (!file) return;
+    try { restoring = parseBackup(await file.text()); }
+    catch (err) { showToast("Hindi Time Log backup ang file na 'yan. Walang nabago.", []); return; }
+    if (!restoring.logs) { restoring = null; showToast("Walang logs sa backup na 'yan.", []); return; }
+    const when = new Date(restoring.taken).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+    const n = restoring.logs, d = Object.keys(restoring.days).length;
+    $("restore-text").textContent = "Backup ng " + when + ": " + n + (n === 1 ? " log" : " logs") + " sa " + d + (d === 1 ? " day." : " days.") + " Idadagdag ito sa logs mo ngayon, at walang mabubura. Babalik din ang logs na binura mo pagkatapos ng backup na 'to.";
+    $("restore-err").hidden = true;
+    $("restore-wrap").classList.add("show");
+  });
+  $("restore-no").addEventListener("click", () => { if (!$("restore-yes").disabled) closeRestore(); });
+  $("restore-wrap").addEventListener("click", e => { if (e.target.id === "restore-wrap" && !$("restore-yes").disabled) closeRestore(); });
+  $("restore-yes").addEventListener("click", async () => {
+    const yes = $("restore-yes"), no = $("restore-no");
+    yes.disabled = no.disabled = true; yes.textContent = "Sandali…";
+    try {
+      const changed = await restoreBackup(restoring);
+      closeRestore(); render();
+      showToast(changed ? "Goods, balik na ang logs ng " + changed + (changed === 1 ? " day." : " days.") : "Kumpleto na pala, walang kailangang ibalik.", []);
+    } catch (err) {
+      $("restore-err").textContent = err && err.plain ? err.plain : "Di na-restore. Kailangan ng internet. Walang nabago.";
+      $("restore-err").hidden = false;
+    }
+    yes.disabled = no.disabled = false; yes.textContent = "Restore";
+  });
+
   // ---------- reset logs ----------
   // Only logs go: every day doc and the running log. Tiles, goals and schedule stay.
   async function resetLogs() {
     if (mode === "db") {
-      // Needs a fresh list from the server. Older days aren't in the cache, so offline would leave them behind.
-      const meta = Object.values(syncMeta);
-      if (meta.some(m => m.fromCache)) throw { plain: "Kailangan ng internet para mag-reset. Walang nabura." };
-      if (meta.some(m => m.hasPendingWrites)) throw { plain: "May nagsi-sync pa. Try ulit in a bit. Walang nabura." };
+      needFreshData("Walang nabura.");
       const snap = await db.collection(root + "/days").get({ source: "server" });
       for (let i = 0; i < snap.docs.length; i += 500) {   // a batch holds 500 at most
         const batch = db.batch();
