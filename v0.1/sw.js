@@ -1,6 +1,6 @@
 // Lets the home screen app open with no internet. Firestore keeps the logs; this keeps the app's files.
 // Bump CACHE when the Firebase SDK version in index.html changes.
-const CACHE = "time-log-1.2";
+const CACHE = "time-log-0.1";
 const FB = "https://www.gstatic.com/firebasejs/10.14.1/";
 const LOCAL = ["./", "index.html", "favicon.png", "apple-touch-icon.png"];
 const SDK = ["firebase-app-compat.js", "firebase-auth-compat.js", "firebase-firestore-compat.js"].map(f => FB + f);
