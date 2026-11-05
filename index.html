@@ -101,6 +101,11 @@ header.top .date { color: var(--ink-soft); font-size: 13px; }
 .btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 .chips { display: flex; flex-wrap: wrap; gap: 8px; }
 
+.day-nav { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
+.day-nav h2 { margin: 0; text-align: center; flex: 1; }
+.day-nav .btn { min-width: 40px; min-height: 36px; padding: 4px 10px; font-size: 16px; }
+.day-nav .btn:disabled { opacity: .35; }
+.week .d, .week .bar { cursor: pointer; }
 /* Timeline */
 .card { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 16px 18px; }
 .card h2 { font-family: var(--display); font-size: 17px; margin: 0 0 12px; }
@@ -304,7 +309,11 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
         <div class="tiles" id="tiles"></div>
       </div>
       <div class="card">
-        <h2>Today so far</h2>
+        <div class="day-nav">
+          <button class="btn" id="day-prev" aria-label="Nakaraang araw">‹</button>
+          <h2 id="day-title">Today so far</h2>
+          <button class="btn" id="day-next" aria-label="Susunod na araw">›</button>
+        </div>
         <div class="bar" id="today-bar"></div>
         <div class="axis"><span>12 AM</span><span>6 AM</span><span>12 PM</span><span>6 PM</span><span>12 AM</span></div>
         <div class="rows" id="today-totals"></div>
@@ -319,9 +328,12 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
   <!-- PUNAN -->
   <section id="view-gaps" class="view" hidden>
     <div style="display:flex;flex-direction:column;gap:18px">
-      <div class="seg" role="tablist" aria-label="Araw">
-        <button id="gap-today" class="on">Ngayon</button>
-        <button id="gap-yday">Kahapon</button>
+      <div class="card" style="padding:10px 12px">
+        <div class="day-nav" style="margin:0">
+          <button class="btn" id="gap-prev" aria-label="Nakaraang araw">‹</button>
+          <h2 id="gap-title" style="margin:0">Today</h2>
+          <button class="btn" id="gap-next" aria-label="Susunod na araw">›</button>
+        </div>
       </div>
       <div class="card" id="gap-card">
         <p class="label" id="gap-count" style="color:var(--ink-soft);font-size:13px;margin:0"></p>
@@ -528,7 +540,9 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
   const kasDays = {};            // key -> finished Kasabay [{ id, c, cat, start, end }]
   let lastClosed = null;         // { key, id } of the session closed by the latest switch
   let toastTap = 0, toastTimer = null, kasTap = 0, showAllKas = false, kasPop = null, liveShown = null, liveChipSig = "", lastSwitch = null, liveSubSig = null, subAdding = false, liveOpen = null;
-  let gapDay = "today", skipped = new Set();
+  let gapDay = null, viewDay = null, skipped = new Set();    // null means today
+  let loadedSince = "";          // the live listener covers days from here on; older ones are fetched on demand
+  const dayState = {};           // key -> "loading" | "done"
   let editing = null;            // { key, id }
 
   // ---------- helpers ----------
@@ -877,6 +891,7 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
   }
   function switchTo(cat) {
     const now = Date.now();
+    viewDay = null;
     const back = lastSwitch && lastSwitch.cat === cat && now - lastSwitch.at < 5 * MIN ? lastSwitch : null;
     lastSwitch = current ? { cat: current.cat, at: now, kas: (current.kas || []).filter(k => !k.auto).map(k => k.cat), sub: current.sub } : null;
     if (current) closeCurrent(now);
@@ -1135,10 +1150,30 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
       r.append(dot, n, v); el.appendChild(r);
     });
   }
+  const shiftDay = (key, by) => { const [y, m, d] = key.split("-").map(Number); return keyOf(new Date(y, m - 1, d + by, 12).getTime()); };
+  function dayName(key) {
+    const today = keyOf(Date.now());
+    return key === today ? "Today" : key === shiftDay(today, -1) ? "Kahapon" : dayLabel(key);
+  }
+  // True once a day's logs are in memory. Writing a day before that would overwrite what's saved.
+  function dayReady(key) {
+    if (mode !== "db" || !loadedSince || key >= loadedSince || dayState[key] === "done") return true;
+    if (dayState[key] === "loading") return false;
+    dayState[key] = "loading";
+    db.doc(root + "/days/" + key).get().then(s => {
+      const b = s.exists ? s.data() : null;
+      if (b) { days[key] = (b.sessions || []).slice(); kasDays[key] = (b.kasabay || []).slice(); }
+      dayState[key] = "done"; render();
+    }).catch(() => { delete dayState[key]; setSync("Di ma-load ang araw na 'yan. Kailangan ng internet.", true); });
+    return false;
+  }
   function render() {
     const now = Date.now(), today = keyOf(now);
     $("today-label").textContent = dayLabel(today);
-    $("today-logs-title").textContent = "Mga log today · " + dayLabel(today).split(", ")[1];
+    const vk = viewDay && viewDay < today ? viewDay : today, isToday = vk === today;
+    $("day-title").textContent = isToday ? "Today so far" : dayName(vk);
+    $("day-next").disabled = isToday;
+    $("today-logs-title").textContent = (isToday ? "Mga log today · " : "Mga log · ") + dayLabel(vk).split(", ")[1];
 
     // live card
     if (current && CAT[current.cat]) {
@@ -1199,26 +1234,27 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
     drawTiles();
 
     // today
-    const list = sessionsFor(today, true);
-    renderBar($("today-bar"), list, midnight(now));
+    const ready = dayReady(vk);
+    const list = sessionsFor(vk, isToday);
+    renderBar($("today-bar"), list, midnight(new Date(vk.replace(/-/g, "/")).getTime()));
     totalsRows($("today-totals"), totals(list));
     const tl = $("today-list"); tl.innerHTML = "";
-    if (!list.length) { const p = document.createElement("p"); p.className = "empty"; p.textContent = "Empty pa. Tap ka ng tile sa taas."; tl.appendChild(p); }
+    if (!list.length) { const p = document.createElement("p"); p.className = "empty"; p.textContent = !ready ? "Sandali, kinukuha pa…" : isToday ? "Empty pa. Tap ka ng tile sa taas." : "Walang naka-log dito."; tl.appendChild(p); }
     // The running log and the back-to-back log before it show as one row.
     const chainStart = Math.max(liveChainStart(), midnight(now));
-    const rows = current ? list.filter(x => x.live || x.start < chainStart).map(x => x.live ? Object.assign({}, x, { start: chainStart }) : x) : list;
+    const rows = current && isToday ? list.filter(x => x.live || x.start < chainStart).map(x => x.live ? Object.assign({}, x, { start: chainStart }) : x) : list;
     rows.slice().reverse().forEach(x => {
       const c = CAT[x.cat] || { name: x.cat, c: "#999" };
       const r = document.createElement("div"); r.className = "row";
       const dot = document.createElement("span"); dot.className = "dot"; dot.style.background = c.c;
       const n = document.createElement("div");
       const nn = document.createElement("div"); nn.className = "n"; nn.textContent = c.name + (x.sub ? " · " + x.sub : "") + (x.live ? " · ngayon" : "");
-      const ss = document.createElement("div"); ss.className = "s"; const xk = kasSummary(today, x);
+      const ss = document.createElement("div"); ss.className = "s"; const xk = kasSummary(vk, x);
       ss.textContent = fmtTime(x.start) + " – " + (x.live ? "ngayon" : fmtTime(x.end)) + (xk ? " · Kasabay: " + xk : "");
       n.append(nn, ss);
       const v = document.createElement("div"); v.className = "v"; v.textContent = fmtDur(x.end - x.start);
       r.append(dot, n, v);
-      const openRow = () => x.live ? openLiveSheet() : openSheet(today, x.id);
+      const openRow = () => x.live ? openLiveSheet() : openSheet(vk, x.id);
       r.style.cursor = "pointer"; r.tabIndex = 0; r.addEventListener("click", openRow); r.addEventListener("keydown", e => { if (e.key === "Enter") openRow(); });
       tl.appendChild(r);
     });
@@ -1229,13 +1265,16 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
   }
   function renderGaps() {
     const now = Date.now();
-    const key = gapDay === "today" ? keyOf(now) : keyOf(now - DAY);
-    const gaps = gapsFor(key);
-    const badgeN = gapsFor(keyOf(now)).length;
+    const today = keyOf(now), key = gapDay && gapDay < today ? gapDay : today;
+    const ready = dayReady(key), gaps = ready ? gapsFor(key) : [];
+    const badgeN = gapsFor(today).length;
     $("gap-badge").hidden = !badgeN; $("gap-badge").textContent = badgeN;
+    $("gap-title").textContent = dayName(key);
+    $("gap-next").disabled = key === today;
     if (!gaps.length) {
       $("gap-card").hidden = true; $("gap-done").hidden = false;
-      $("gap-done-text").textContent = gapDay === "today" ? "Kumpleto today. Ang sipag, infairness." : "Kumpleto kahapon. Love that for you.";
+      $("gap-done").querySelector("h2").textContent = ready ? "Walang gaps" : "Sandali";
+      $("gap-done-text").textContent = !ready ? "Kinukuha pa ang logs ng araw na 'to…" : key === today ? "Kumpleto today. Ang sipag, infairness." : "Kumpleto ang " + dayName(key) + ". Love that for you.";
       return;
     }
     $("gap-card").hidden = false; $("gap-done").hidden = true;
@@ -1288,6 +1327,7 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
       const bar = document.createElement("div"); bar.className = "bar"; bar.style.height = "16px";
       renderBar(bar, list, midnight(t));
       const h = document.createElement("div"); h.className = "h"; h.textContent = fmtHrs(tracked);
+      [d, bar].forEach(el => el.addEventListener("click", () => { viewDay = key; render(); $("tab-now").click(); }));
       wrap.append(d, bar, h);
     }
     totalsRows($("week-totals"), all, allMs);
@@ -1904,8 +1944,11 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
     Object.keys(tabs).forEach(j => { $(tabs[j]).hidden = j !== k; $("tab-" + j).classList.toggle("on", j === k); });
     window.scrollTo(0, 0);
   }));
-  $("gap-today").addEventListener("click", () => { gapDay = "today"; $("gap-today").classList.add("on"); $("gap-yday").classList.remove("on"); renderGaps(); });
-  $("gap-yday").addEventListener("click", () => { gapDay = "yday"; $("gap-yday").classList.add("on"); $("gap-today").classList.remove("on"); renderGaps(); });
+  const stepDay = (cur, by) => { const today = keyOf(Date.now()); const next = shiftDay(cur && cur < today ? cur : today, by); return next >= today ? null : next; };
+  $("day-prev").addEventListener("click", () => { viewDay = stepDay(viewDay, -1); render(); });
+  $("day-next").addEventListener("click", () => { viewDay = stepDay(viewDay, 1); render(); });
+  $("gap-prev").addEventListener("click", () => { gapDay = stepDay(gapDay, -1); renderGaps(); });
+  $("gap-next").addEventListener("click", () => { gapDay = stepDay(gapDay, 1); renderGaps(); });
 
   // ---------- boot ----------
   render();
@@ -1956,6 +1999,7 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
     $("acct-who").textContent = "Naka-login bilang " + user.email + ".";
     const live = { includeMetadataChanges: true };
     const since = keyOf(Date.now() - 13 * DAY);
+    loadedSince = since;
     db.collection(root + "/days").where("date", ">=", since).onSnapshot(live, snap => {
       snap.docs.forEach(d => {
         const b = d.data();
