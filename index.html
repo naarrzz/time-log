@@ -97,6 +97,7 @@ header.top .date { color: var(--ink-soft); font-size: 13px; }
   border-radius: 999px; padding: 8px 14px; font: 600 13px var(--body); cursor: pointer; }
 .btn { transition: transform .1s ease; }
 .btn:active { transform: scale(.96); }
+.btn.danger { color: var(--warn); }
 .btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 .chips { display: flex; flex-wrap: wrap; gap: 8px; }
 
@@ -155,6 +156,7 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
 .btn.tag:not(.plain)[aria-pressed="true"]::before { content: ""; display: inline-block; width: 7px; height: 7px; margin-right: 6px; border-radius: 50%; background: currentColor; vertical-align: 1px; animation: pulse 1.6s ease-in-out infinite; }
 .btn.tag.pop { animation: pop .22s ease-out; }
 .sub-h { font-size: 12px; color: var(--ink-soft); margin: 14px 0 0; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+.link-btn { appearance: none; border: 0; background: none; color: var(--ink-soft); font: 500 13px var(--body); text-decoration: underline; padding: 6px; cursor: pointer; }
 /* Login */
 .login { max-width: 400px; margin: 0 auto; padding: calc(56px + env(safe-area-inset-top)) 16px 32px; display: flex; flex-direction: column; gap: 16px; }
 .login h1 { font-family: var(--display); font-size: 30px; margin: 0; letter-spacing: -0.01em; }
@@ -254,6 +256,7 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
     <p class="sync warn" id="login-err" role="alert" style="margin:0" hidden></p>
     <button class="btn primary" id="login-btn" type="submit">Login</button>
     <button class="btn" id="login-switch" type="button">Wala pang account? Gawa tayo</button>
+    <button class="link-btn" id="login-forgot" type="button">Nakalimutan ang password?</button>
   </form>
   <hr>
   <button class="btn" id="guest-btn" type="button">Try muna, no account</button>
@@ -394,7 +397,7 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
       <div class="tagrow" id="sheet-tags" style="margin-top:10px" hidden></div>
     </div>
     <div class="chips">
-      <button class="btn" id="sheet-delete">Delete log</button>
+      <button class="btn danger" id="sheet-delete">Delete log</button>
       <button class="btn primary" id="sheet-close">Done</button>
     </div>
   </div>
@@ -964,6 +967,17 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
     toastTimer = setTimeout(() => $("toast").classList.remove("show"), mins.length ? 7000 : 2500);
   }
 
+  // A delete can be taken back for a few seconds.
+  function showUndo(text, undo) {
+    showToast(text, []);
+    const chips = $("toast-chips"), b = document.createElement("button");
+    b.className = "btn"; b.textContent = "Undo";
+    b.addEventListener("click", () => { hideToast(); undo(); render(); });
+    chips.appendChild(b); chips.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(hideToast, 6000);
+  }
+
   // ---------- derived ----------
   function sessionsFor(key, includeLive) {
     const list = (days[key] || []).slice();
@@ -1455,8 +1469,16 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
       showToast("Goods, naayos na.", []);
     });
     del.addEventListener("click", () => {
-      if (k.running) { current.kas = (current.kas || []).filter(x => x.cat !== k.cat); saveCurrent(); }
-      else { kasDays[key] = (kasDays[key] || []).filter(x => x.id !== k.id); saveDay(key); }
+      const name = (CAT[k.cat] || { name: k.cat }).name;
+      if (k.running) {
+        const gone = (current.kas || []).find(x => x.cat === k.cat), mine = current;
+        current.kas = current.kas.filter(x => x !== gone); saveCurrent();
+        showUndo("Tanggal na ang " + name + ".", () => { if (current === mine && gone) { current.kas = (current.kas || []).concat([gone]); saveCurrent(); } });
+      } else {
+        const before = (kasDays[key] || []).slice();
+        kasDays[key] = before.filter(x => x.id !== k.id); saveDay(key);
+        showUndo("Tanggal na ang " + name + ".", () => { kasDays[key] = before; saveDay(key); if (editing) drawSheetKas(); });
+      }
       kasOpen = null; drawSheetKas(); render();
     });
     acts.append(save, del);
@@ -1574,9 +1596,10 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
   $("sched-cancel").addEventListener("click", closeSchedule);
   $("sched-wrap").addEventListener("click", e => { if (e.target.id === "sched-wrap") closeSchedule(); });
   $("sched-delete").addEventListener("click", () => {
+    const before = schedules;
     schedules = schedules.filter(x => x.id !== schedDraft.id);
     saveSchedules(); closeSchedule(); renderSchedules();
-    showToast("Okay, tanggal na ang schedule.", []);
+    showUndo("Okay, tanggal na ang schedule.", () => { schedules = before; saveSchedules(); });
   });
   $("sched-save").addEventListener("click", () => {
     const fail = text => { $("sched-err").textContent = text; $("sched-err").hidden = false; };
@@ -1825,10 +1848,12 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
   $("sheet-wrap").addEventListener("click", e => { if (e.target.id === "sheet-wrap") closeSheet(); });
   $("sheet-delete").addEventListener("click", () => {
     if (!editing) return;
-    const gone = (days[editing.key] || []).find(s => s.id === editing.id);
+    const key = editing.key, before = (days[key] || []).slice(), kasBefore = (kasDays[key] || []).slice();
+    const gone = before.find(s => s.id === editing.id);
     if (gone) carveKas(gone.start, gone.end);   // its Kasabay go with it
-    days[editing.key] = (days[editing.key] || []).filter(s => s.id !== editing.id);
-    saveDay(editing.key); closeSheet(); render();
+    days[key] = before.filter(s => s.id !== editing.id);
+    saveDay(key); closeSheet(); render();
+    showUndo("Tanggal na ang log.", () => { days[key] = before; kasDays[key] = kasBefore; saveDay(key); });
   });
   $("stop-btn").addEventListener("click", stopNow);
   $("live-edit").addEventListener("click", () => {
@@ -1859,6 +1884,7 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
     $("tabs").hidden = false;
   }
   function showLogin(error) {
+    $("login-err").className = "sync warn";
     $("app").hidden = true;
     $("tabs").hidden = true;
     $("login").hidden = false;
@@ -1982,7 +2008,20 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
     $("login-pass2-wrap").hidden = !signingUp;
     $("login-pass2").required = signingUp;
     $("login-pass2").value = "";
+    $("login-forgot").hidden = signingUp;
     $("login-err").hidden = true;
+  });
+  $("login-forgot").addEventListener("click", () => {
+    if (!auth) return;
+    const email = $("login-email").value.trim(), box = $("login-err");
+    const say = (text, warn) => { box.className = warn ? "sync warn" : "sync"; box.textContent = text; box.hidden = false; };
+    if (!email) { say("Ilagay muna ang email mo sa taas.", true); return; }
+    // Same message whether or not the account exists, so this can't be used to check who has one.
+    const sent = () => say("Kung may account ang email na 'yan, may reset link na papunta. I-check din ang spam.");
+    auth.sendPasswordResetEmail(email).then(sent).catch(err => {
+      if (err.code === "auth/user-not-found") sent();
+      else say(LOGIN_ERRORS[err.code] || "Di na-send ang reset link. Try ulit.", true);
+    });
   });
   $("login-form").addEventListener("submit", e => {
     e.preventDefault();
