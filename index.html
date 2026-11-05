@@ -2025,6 +2025,7 @@ nav.tabs .badge { position: absolute; top: 1px; left: calc(50% + 6px); min-width
     if (gap && gap.filled) { render(); showUndo("Goods, nadagdag na.", () => restoreLogs(gap.before)); }
   }
   $("add-log-cancel").addEventListener("click", closeAddLog);
+  ["add-log-start", "add-log-end"].forEach(id => $(id).addEventListener("input", () => { $("add-log-err").hidden = true; }));
   $("add-log-wrap").addEventListener("click", e => { if (e.target.id === "add-log-wrap") closeAddLog(); });
   $("add-log-save").addEventListener("click", () => {
     const fail = text => { $("add-log-err").textContent = text; $("add-log-err").hidden = false; };

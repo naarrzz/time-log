@@ -547,7 +547,7 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
     const out = [];
     list.slice().sort((a, b) => a.start - b.start).forEach(s => {
       const last = out[out.length - 1];
-      if (last && last.cat === s.cat && s.start - last.end < MIN) {
+      if (last && last.cat === s.cat && (last.sub || "") === (s.sub || "") && s.start - last.end < MIN) {   // patched later: this version knew nothing of labels and flattened them in the shared logs
         last.end = Math.max(last.end, s.end);
         last.c = Math.max(createdOf(last), createdOf(s));
       } else out.push(Object.assign({}, s));
