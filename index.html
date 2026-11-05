@@ -133,9 +133,15 @@ header.top .date { color: var(--ink-soft); font-size: 13px; font-weight: 600; }
 .swipe { position: relative; }
 .swipe + .swipe > .row, .row + .swipe > .row, .swipe + .row { border-top: .5px solid var(--line); }
 .swipe:first-child > .row { border-top: none; }
-.swipe > .row { position: relative; z-index: 1; background: var(--surface); touch-action: pan-y; }
-.swipe-del { position: absolute; z-index: 0; right: 0; top: 6px; bottom: 6px; width: max(74px, var(--reveal, 0px)); border: 0; border-radius: 14px; background: #FF3B30; color: #fff;
-  display: flex; align-items: center; justify-content: flex-end; padding: 0 25px; cursor: pointer; opacity: 0; transition: opacity .12s; }
+.swipe { overflow: hidden; }
+.swipe > .row { position: relative; z-index: 1; background: var(--surface); touch-action: pan-y; transition: border-radius .15s, background-color .15s; }
+/* While it's pulled aside, the row becomes its own rounded card, with a gap before the button, like Health. */
+.swipe.moving > .row, .swipe.open > .row { border-radius: 16px; border-top-color: transparent; background: color-mix(in srgb, var(--ink) 7%, var(--surface)); padding-left: 12px; padding-right: 12px; }
+/* Sized like Health's: a 60pt pill, 8pt from the row, the trash icon in its middle. It grows with the swipe,
+   and past the point where letting go deletes, the icon jumps to the front. */
+.swipe-del { position: absolute; z-index: 0; right: 0; top: 4px; bottom: 4px; width: max(0px, calc(var(--reveal, 0px) - 8px)); border: 0; border-radius: 999px; background: #FF3B30; color: #fff;
+  display: flex; align-items: center; justify-content: center; padding: 0; overflow: hidden; cursor: pointer; opacity: 0; transition: opacity .12s; }
+.swipe.commit .swipe-del { justify-content: flex-start; padding-left: 20px; }
 .swipe.moving .swipe-del, .swipe.open .swipe-del { opacity: 1; }
 .swipe-del svg { width: 20px; height: 20px; flex: none; }
 .swipe.gone { transition: height .22s ease, opacity .22s ease; overflow: hidden; }
@@ -2603,15 +2609,16 @@ nav.tabs .badge { position: absolute; top: 1px; left: calc(50% + 6px); min-width
         wrap.classList.add("moving"); row.style.transition = "none";
       }
       place(Math.min(0, start.base + dx));
+      wrap.classList.toggle("commit", -x > wrap.offsetWidth * 0.55);
     });
     const end = () => {
       if (!start) return;
-      const was = moved; start = null; moved = false; wrap.classList.remove("moving");
+      const was = moved; start = null; moved = false; wrap.classList.remove("moving", "commit");
       if (!was) return;
       justSwiped = true; setTimeout(() => { justSwiped = false; }, 350);   // the swipe shouldn't also open the log
       if (-x > wrap.offsetWidth * 0.55) { remove(); return; }
       row.style.transition = "transform .25s cubic-bezier(.2, .8, .3, 1)";
-      if (-x > 40) { place(-90); wrap.classList.add("open"); openSwipe = wrap; }
+      if (-x > 40) { place(-68); wrap.classList.add("open"); openSwipe = wrap; }   // the 60pt button and the 8pt gap
       else { place(0); wrap.classList.remove("open"); if (openSwipe === wrap) openSwipe = null; }
     };
     row.addEventListener("pointerup", end);
