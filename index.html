@@ -129,6 +129,22 @@ header.top .date { color: var(--ink-soft); font-size: 13px; font-weight: 600; }
 .row.trip .v { font-weight: 700; }
 .row.trip-part { padding-left: 22px; border-top-style: dotted; }
 .row.trip-part .n { font-weight: 500; }
+/* Swipe a log left to delete it, like Mail and Health: a red button shows, and a long swipe deletes right away. */
+.swipe { position: relative; }
+.swipe + .swipe > .row, .row + .swipe > .row, .swipe + .row { border-top: .5px solid var(--line); }
+.swipe:first-child > .row { border-top: none; }
+.swipe > .row { position: relative; z-index: 1; background: var(--surface); touch-action: pan-y; }
+.swipe-del { position: absolute; z-index: 0; right: 0; top: 6px; bottom: 6px; width: max(74px, var(--reveal, 0px)); border: 0; border-radius: 14px; background: #FF3B30; color: #fff;
+  display: flex; align-items: center; justify-content: flex-end; padding: 0 25px; cursor: pointer; opacity: 0; transition: opacity .12s; }
+.swipe.moving .swipe-del, .swipe.open .swipe-del { opacity: 1; }
+.swipe-del svg { width: 20px; height: 20px; flex: none; }
+.swipe.gone { transition: height .22s ease, opacity .22s ease; overflow: hidden; }
+/* Swiping between days nudges the card in from the side it came from. */
+.day-swipe { touch-action: pan-y; }
+.slide-l { animation: slide-l .26s cubic-bezier(.2, .8, .3, 1); }
+.slide-r { animation: slide-r .26s cubic-bezier(.2, .8, .3, 1); }
+@keyframes slide-l { from { transform: translateX(28px); opacity: .3; } to { transform: none; opacity: 1; } }
+@keyframes slide-r { from { transform: translateX(-28px); opacity: .3; } to { transform: none; opacity: 1; } }
 .row:first-child { border-top: none; }
 .row .dot { width: 10px; height: 10px; border-radius: 50%; }
 .row .n { font-weight: 500; }
@@ -406,7 +422,7 @@ nav.tabs .badge { position: absolute; top: 1px; left: calc(50% + 6px); min-width
         <div class="ask-row"><p class="ask">So, anong ganap?</p><button class="btn" id="cats-edit">Edit tiles</button></div>
         <div class="tiles" id="tiles"></div>
       </div>
-      <div class="card">
+      <div class="card day-swipe" id="day-card">
         <div class="day-nav">
           <button class="btn" id="day-prev" aria-label="Nakaraang araw">‹</button>
           <h2 id="day-title">Today so far</h2>
@@ -425,7 +441,7 @@ nav.tabs .badge { position: absolute; top: 1px; left: calc(50% + 6px); min-width
 
   <!-- PUNAN -->
   <section id="view-gaps" class="view" hidden>
-    <div style="display:flex;flex-direction:column;gap:18px">
+    <div style="display:flex;flex-direction:column;gap:18px" class="day-swipe" id="gap-swipe">
       <div class="card" style="padding:10px 12px">
         <div class="day-nav" style="margin:0">
           <button class="btn" id="gap-prev" aria-label="Nakaraang araw">‹</button>
@@ -1547,7 +1563,7 @@ nav.tabs .badge { position: absolute; top: 1px; left: calc(50% + 6px); min-width
       r.append(dot, n, v);
       const openRow = () => x.live ? openLiveSheet() : openSheet(vk, x.id);
       r.tabIndex = 0; r.addEventListener("click", openRow); r.addEventListener("keydown", e => { if (e.key === "Enter") openRow(); });
-      return r;
+      return x.live ? r : swipeToDelete(r, () => deleteLog(vk, x.id));   // the running log stops with Stop, not a swipe
     };
     const tripRow = g => {
       const c = CAT[g[0].cat] || { name: g[0].cat, c: "#999" }, last = g[g.length - 1];
@@ -2533,15 +2549,117 @@ nav.tabs .badge { position: absolute; top: 1px; left: calc(50% + 6px); min-width
   });
   $("sheet-close").addEventListener("click", closeSheet);
   $("sheet-wrap").addEventListener("click", e => { if (e.target.id === "sheet-wrap") closeSheet(); });
+  // Deleting a log takes its Kasabay with it, and Undo brings both back.
+  function deleteLog(key, id) {
+    const before = (days[key] || []).slice(), kasBefore = (kasDays[key] || []).slice();
+    const gone = before.find(s => s.id === id);
+    if (!gone) return;
+    carveKas(gone.start, gone.end);
+    days[key] = before.filter(s => s.id !== id);
+    saveDay(key); render();
+    showUndo("Tanggal na ang log.", () => { days[key] = before; kasDays[key] = kasBefore; saveDay(key); });
+  }
   $("sheet-delete").addEventListener("click", () => {
     if (!editing) return;
-    const key = editing.key, before = (days[key] || []).slice(), kasBefore = (kasDays[key] || []).slice();
-    const gone = before.find(s => s.id === editing.id);
-    if (gone) carveKas(gone.start, gone.end);   // its Kasabay go with it
-    days[key] = before.filter(s => s.id !== editing.id);
-    saveDay(key); closeSheet(); render();
-    showUndo("Tanggal na ang log.", () => { days[key] = before; kasDays[key] = kasBefore; saveDay(key); });
+    const { key, id } = editing;
+    closeSheet(); deleteLog(key, id);
   });
+
+  // ---------- swipes ----------
+  let openSwipe = null;   // the one log row showing its delete button
+  function closeOpenSwipe() {
+    if (!openSwipe) return;
+    const w = openSwipe; openSwipe = null;
+    w.classList.remove("open");
+    const row = w.querySelector(".row"); row.style.transition = "transform .25s cubic-bezier(.2, .8, .3, 1)"; row.style.transform = "";
+    w.style.removeProperty("--reveal");
+  }
+  document.addEventListener("pointerdown", e => { if (openSwipe && !openSwipe.contains(e.target)) closeOpenSwipe(); }, true);
+  function swipeToDelete(row, onDelete) {
+    const wrap = document.createElement("div"); wrap.className = "swipe";
+    const del = document.createElement("button"); del.type = "button"; del.className = "swipe-del"; del.setAttribute("aria-label", "Burahin ang log");
+    del.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg>';
+    wrap.append(del, row);
+    let start = null, x = 0, moved = false, justSwiped = false;
+    const place = to => { x = to; row.style.transform = to ? "translateX(" + to + "px)" : ""; wrap.style.setProperty("--reveal", -to + "px"); };
+    const remove = () => {
+      wrap.classList.remove("open"); if (openSwipe === wrap) openSwipe = null;
+      row.style.transition = "transform .2s ease-in"; place(-wrap.offsetWidth);
+      wrap.style.height = wrap.offsetHeight + "px"; wrap.classList.add("gone");
+      requestAnimationFrame(() => { wrap.style.height = "0px"; wrap.style.opacity = "0"; });
+      setTimeout(onDelete, 220);
+    };
+    row.addEventListener("pointerdown", e => {
+      if (e.pointerType === "mouse" && e.button) return;
+      start = { x: e.clientX, y: e.clientY, base: x, id: e.pointerId }; moved = false;
+    });
+    row.addEventListener("pointermove", e => {
+      if (!start || e.pointerId !== start.id) return;
+      const dx = e.clientX - start.x, dy = e.clientY - start.y;
+      if (!moved) {
+        if (Math.abs(dx) < 10 || Math.abs(dx) < Math.abs(dy) * 1.3) return;
+        moved = true; try { row.setPointerCapture(e.pointerId); } catch (_) {}
+        if (openSwipe && openSwipe !== wrap) closeOpenSwipe();
+        wrap.classList.add("moving"); row.style.transition = "none";
+      }
+      place(Math.min(0, start.base + dx));
+    });
+    const end = () => {
+      if (!start) return;
+      const was = moved; start = null; moved = false; wrap.classList.remove("moving");
+      if (!was) return;
+      justSwiped = true; setTimeout(() => { justSwiped = false; }, 350);   // the swipe shouldn't also open the log
+      if (-x > wrap.offsetWidth * 0.55) { remove(); return; }
+      row.style.transition = "transform .25s cubic-bezier(.2, .8, .3, 1)";
+      if (-x > 40) { place(-90); wrap.classList.add("open"); openSwipe = wrap; }
+      else { place(0); wrap.classList.remove("open"); if (openSwipe === wrap) openSwipe = null; }
+    };
+    row.addEventListener("pointerup", end);
+    row.addEventListener("pointercancel", () => { if (start && !moved) start = null; else end(); });
+    // A tap on a row that's showing its button just closes it.
+    row.addEventListener("click", e => {
+      if (justSwiped) { e.stopPropagation(); return; }
+      if (wrap.classList.contains("open")) { e.stopPropagation(); closeOpenSwipe(); }
+    }, true);
+    del.addEventListener("click", remove);
+    return wrap;
+  }
+  // Swipe right for the day before, left for the day after, like flipping pages. Scrolling up and down still works.
+  function swipeDays(el, prevBtn, nextBtn) {
+    let start = null, moved = false, justSwiped = false;
+    el.addEventListener("click", e => { if (justSwiped) { e.stopPropagation(); e.preventDefault(); } }, true);
+    el.addEventListener("pointerdown", e => {
+      if (e.pointerType === "mouse" && e.button) return;
+      if (e.target.closest(".swipe")) return;   // log rows have their own swipe
+      start = { x: e.clientX, y: e.clientY, id: e.pointerId }; moved = false;
+    });
+    el.addEventListener("pointermove", e => {
+      if (!start || e.pointerId !== start.id) return;
+      const dx = e.clientX - start.x, dy = e.clientY - start.y;
+      if (!moved) {
+        if (Math.abs(dx) < 12 || Math.abs(dx) < Math.abs(dy) * 1.3) return;
+        moved = true; try { el.setPointerCapture(e.pointerId); } catch (_) {}
+      }
+      const blocked = dx < 0 && $(nextBtn).disabled;   // nothing after today, so it only gives a little
+      el.style.transition = "none"; el.style.transform = "translateX(" + dx * (blocked ? 0.12 : 0.35) + "px)";
+    });
+    const end = e => {
+      if (!start) return;
+      const dx = e.clientX - start.x, was = moved; start = null; moved = false;
+      el.style.transition = "transform .25s cubic-bezier(.3, 1.3, .5, 1)"; el.style.transform = "";
+      if (!was) return;
+      const btn = $(dx > 0 ? prevBtn : nextBtn);
+      if (Math.abs(dx) >= 60 && !btn.disabled) {
+        btn.click();   // before the guard below, which would swallow this click too
+        el.style.transition = ""; playOnce(el, dx > 0 ? "slide-r" : "slide-l");
+      }
+      justSwiped = true; setTimeout(() => { justSwiped = false; }, 350);   // the finger lifting shouldn't tap a tile
+    };
+    el.addEventListener("pointerup", end);
+    el.addEventListener("pointercancel", () => { start = null; moved = false; el.style.transform = ""; });
+  }
+  swipeDays($("day-card"), "day-prev", "day-next");
+  swipeDays($("gap-swipe"), "gap-prev", "gap-next");
   $("stop-btn").addEventListener("click", stopNow);
   $("extra-subs").addEventListener("click", () => { liveOpen = liveOpen === "subs" ? null : "subs"; render(); });
   $("extra-kas").addEventListener("click", () => { liveOpen = liveOpen === "kas" ? null : "kas"; render(); });
@@ -2648,10 +2766,17 @@ nav.tabs .badge { position: absolute; top: 1px; left: calc(50% + 6px); min-width
     nativePost({
       running: c ? { id: current.cat, name: c.name, color: c.c, start: tripStart(), logStart: current.start, sub: current.sub || null } : null,
       tiles: shownCats().map(x => ({ id: x.id, name: x.name, color: x.c })),
+      top: mostUsedTiles(),
       today: Object.entries(totals(sessionsFor(today, false))).map(([id, ms]) => { const x = CAT[id] || { name: id, c: "#999999" }; return { id, name: x.name, color: x.c, ms }; }),
       gaps: gapsFor(today).length,
       day: today
     });
+  }
+  // The widget's default shortcuts: the tiles with the most time in the last 7 days.
+  function mostUsedTiles() {
+    const t = {}, now = Date.now();
+    for (let i = 0; i < 7; i++) sessionsFor(keyOf(now - i * DAY), true).forEach(x => { t[x.cat] = (t[x.cat] || 0) + (x.end - x.start); });
+    return shownCats().map(c => c.id).filter(id => t[id]).sort((a, b) => t[b] - t[a]);
   }
   if (nativeBridge) window.timeLogAction = (action, id) => {
     if (action === "tab") { if (tabs[id]) $("tab-" + id).click(); return; }
