@@ -2052,7 +2052,7 @@ nav.tabs .badge { position: absolute; top: 1px; left: calc(50% + 6px); min-width
     if (gap && !gap.before) gap.before = before;
     addSession(cat, ns, ne, addLog.sub || undefined);
     if (gap) {
-      gap.filled += ne - ns;
+      gap.filled += ne - ns; gap.parts = (gap.parts || 0) + 1;
       schedules.forEach(s => {   // same as logging it live: fixed hours run alongside as Kasabay
         const w = s.cat !== cat && schedSpan(s, ns);
         if (w && Math.min(ne, w[1]) > Math.max(ns, w[0])) addKas(s.cat, Math.max(ns, w[0]), Math.min(ne, w[1]));
@@ -2063,7 +2063,8 @@ nav.tabs .badge { position: absolute; top: 1px; left: calc(50% + 6px); min-width
         return;
       }
       $("add-log-wrap").classList.remove("show"); addLog = null; render();
-      showUndo(fmtDur(gap.filled) + " na " + CAT[cat].name + ". Sakto, noted!", () => restoreLogs(gap.before));
+      // One tile can take the credit only if it was the whole gap.
+      showUndo(gap.parts === 1 ? fmtDur(gap.filled) + " na " + CAT[cat].name + ". Sakto, noted!" : "Goods, napuno na ang " + fmtDur(gap.filled) + " na gap.", () => restoreLogs(gap.before));
       return;
     }
     $("add-log-wrap").classList.remove("show"); addLog = null; render();
