@@ -175,11 +175,16 @@ header.top .date { color: var(--ink-soft); font-size: 13px; font-weight: 600; }
 
 /* Tabs: a capsule floating over the content. The glass itself is in the Glass block below. */
 nav.tabs { position: fixed; left: 0; right: 0; bottom: max(10px, env(safe-area-inset-bottom)); display: flex; justify-content: center; padding: 0 16px; z-index: 10; pointer-events: none; }
-nav.tabs .in { position: relative; display: flex; width: min(300px, 100%); padding: 5px; border-radius: 30px; overflow: hidden; pointer-events: auto; background: var(--surface); box-shadow: 0 8px 24px rgba(0,0,0,.18); transition: scale .3s cubic-bezier(.3, 1.6, .5, 1); }
-nav.tabs .in:has(button:active) { scale: 1.02; }
+nav.tabs .in { position: relative; display: flex; width: min(300px, 100%); padding: 5px; border-radius: 30px; overflow: hidden; pointer-events: auto; touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; background: var(--surface); box-shadow: 0 8px 24px rgba(0,0,0,.18); transition: scale .3s cubic-bezier(.3, 1.6, .5, 1); }
+nav.tabs .in.holding { scale: 1.02; }
 /* One highlight slides between the tabs like a drop of glass: it overshoots a bit and stretches as it moves. */
 .tab-glass { position: absolute; top: 5px; bottom: 5px; left: 5px; width: calc((100% - 10px) / 4); border-radius: 25px; background: var(--fill);
-  box-shadow: inset 0 0 0 .5px var(--glass-edge), inset 0 1px 0 var(--glass-top); translate: calc(var(--i, 0) * 100%) 0; transition: translate .45s cubic-bezier(.3, 1.25, .4, 1); pointer-events: none; }
+  box-shadow: inset 0 0 0 .5px var(--glass-edge), inset 0 1px 0 var(--glass-top); translate: calc(var(--i, 0) * 100%) 0; transition: translate .45s cubic-bezier(.3, 1.25, .4, 1), scale .25s cubic-bezier(.3, 1.6, .5, 1); pointer-events: none; }
+/* Holding swells the highlight. Dragging makes it follow the finger; letting go springs it to the nearest tab. */
+.holding .tab-glass { scale: 1.1 1.14; }
+.dragging .tab-glass { translate: var(--x, 0) 0; transition: translate .06s linear, scale .25s cubic-bezier(.3, 1.6, .5, 1); }
+nav.tabs .in.dragging button { color: var(--ink-soft); }
+nav.tabs .in.dragging button.peek { color: var(--accent); }
 .tab-glass.squish { animation: squish .45s ease-out; }
 nav.tabs button.on svg { animation: tab-icon .4s cubic-bezier(.3, 1.6, .5, 1); }
 nav.tabs button { flex: 1; appearance: none; border: 0; background: transparent; color: var(--ink-soft); display: flex; flex-direction: column; align-items: center; gap: 1px;
@@ -2363,6 +2368,41 @@ nav.tabs .badge { position: absolute; top: 1px; left: calc(50% + 6px); min-width
     $("page-title").textContent = $("tab-" + k).textContent.replace(/\d+$/, "");
     window.scrollTo(0, 0);
   }));
+  // Hold the tab bar and slide: the highlight follows your finger, and letting go opens the tab under it.
+  // This one needs script, since CSS can't follow a finger.
+  (() => {
+    const bar = document.querySelector("nav.tabs .in"), keys = Object.keys(tabs);
+    let held = null, justDragged = false;
+    const place = x => {
+      const box = bar.getBoundingClientRect(), w = (box.width - 10) / keys.length;
+      const left = Math.min(Math.max(x - box.left - 5 - w / 2, 0), w * (keys.length - 1));
+      bar.style.setProperty("--x", left + "px");
+      const i = Math.round(left / w);
+      keys.forEach((k, j) => $("tab-" + k).classList.toggle("peek", j === i));
+      return keys[i];
+    };
+    const end = open => {
+      if (!held) return;
+      const k = held.dragging && open ? place(open.clientX) : null;
+      if (held.dragging) { justDragged = true; setTimeout(() => { justDragged = false; }, 400); }
+      held = null;
+      bar.classList.remove("holding", "dragging");
+      keys.forEach(j => $("tab-" + j).classList.remove("peek"));
+      if (k) $("tab-" + k).click();
+    };
+    bar.addEventListener("pointerdown", e => { held = { x: e.clientX, dragging: false }; bar.classList.add("holding"); });
+    window.addEventListener("pointermove", e => {
+      if (!held) return;
+      if (!held.dragging && Math.abs(e.clientX - held.x) < 6) return;
+      held.dragging = true;
+      bar.classList.add("dragging");
+      place(e.clientX);
+    });
+    window.addEventListener("pointerup", e => end(e));
+    window.addEventListener("pointercancel", () => end(null));
+    // The browser can still send its own tap after a drag. The drag already decided, so ignore that one.
+    bar.addEventListener("click", e => { if (justDragged && e.isTrusted) { e.stopPropagation(); e.preventDefault(); } }, true);
+  })();
   const stepDay = (cur, by) => { const today = keyOf(Date.now()); const next = shiftDay(cur && cur < today ? cur : today, by); return next >= today ? null : next; };
   $("day-prev").addEventListener("click", () => { viewDay = stepDay(viewDay, -1); render(); });
   $("day-next").addEventListener("click", () => { viewDay = stepDay(viewDay, 1); render(); });
