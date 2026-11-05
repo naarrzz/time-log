@@ -1354,7 +1354,10 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
     const top = Object.entries(all).filter(([id]) => id !== "tulog").sort((a, b) => b[1] - a[1])[0];
     let text = "";
     if (short) text = CAT[short.g.cat].name + ": kulang pa ng " + fmtDur(short.left) + (short.g.per === "day" ? " today." : " ngayong 7 days.");
-    else if (shown.length) text = "Pasok lahat ng goals mo. Ang galing!";
+    else if (shown.length) {
+      const over = shown.map(g => ({ g, extra: doneMs(g) - g.hours * HOUR })).filter(x => x.extra >= MIN).sort((a, b) => b.extra - a.extra)[0];
+      text = over ? "Pasok lahat ng goals mo. Overachiever ka sa " + CAT[over.g.cat].name + ": sobra ng " + fmtDur(over.extra) + "!" : "Pasok lahat ng goals mo. Ang galing!";
+    }
     else if (top) text = "Main character mo this week: " + (CAT[top[0]] ? CAT[top[0]].name : top[0]) + ", " + fmtDur(top[1]) + ".";
     $("insight-text").textContent = text;
     const el = $("insight-goals"); el.innerHTML = "";
@@ -1363,7 +1366,7 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
       const row = document.createElement("div"); row.className = "goal-row";
       const head = document.createElement("div"); head.className = "goal-top";
       const n = document.createElement("span"); n.textContent = c.name;
-      const v = document.createElement("span"); v.className = "v"; v.textContent = fmtHrs(ms) + " / " + g.hours + "h " + (g.per === "day" ? "today" : "· 7 days");
+      const v = document.createElement("span"); v.className = "v"; v.textContent = fmtHrs(ms) + " / " + g.hours + "h " + (g.per === "day" ? "today" : "· 7 days") + (ms - g.hours * HOUR >= MIN ? " · sobra ng " + fmtDur(ms - g.hours * HOUR) : "");
       head.append(n, v);
       const track = document.createElement("div"); track.className = "goal-track";
       const fill = document.createElement("div"); fill.className = "goal-fill";
