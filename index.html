@@ -194,7 +194,7 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
 .quiz-add { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
 .quiz-add input { font: 16px var(--body); color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; min-width: 0; }
 /* Edit tiles */
-.cat-row { display: grid; grid-template-columns: 40px 1fr 40px auto; gap: 8px; align-items: center; }
+.cat-row { display: grid; grid-template-columns: 40px 1fr 40px 78px; gap: 8px; align-items: center; }
 .cat-row.off input { opacity: .4; }
 .cat-row input[type="color"] { width: 40px; height: 40px; padding: 2px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
 .cat-row input[type="text"] { font: 16px var(--body); color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; min-width: 0; width: 100%; }
@@ -361,7 +361,7 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
       </div>
     </div>
   </section>
-  <p class="credit">v1.1 · by Narz Angelo Alcaide</p>
+  <p class="credit">v1.1.1 · by Narz Angelo Alcaide</p>
 </div>
 
 <div class="toast" id="toast" role="status" aria-live="polite">
@@ -413,6 +413,7 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
     <h3 id="cats-title">Edit tiles</h3>
     <p class="empty">Rename, recolor, reorder, go. Safe pa rin ang old logs kahit tanggalin mo ang tile.</p>
     <div id="cats-list"></div>
+    <div class="chips"><button class="btn" id="cats-removed" hidden></button></div>
     <p class="sync warn" id="cats-err" role="alert" style="margin:0" hidden></p>
     <div class="chips">
       <button class="btn" id="cats-add">+ Add tile</button>
@@ -1592,10 +1593,13 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
   });
 
   // ---------- edit tiles ----------
-  let catDraft = [];
+  let catDraft = [], catShowRemoved = false;
   function drawCats() {
     const el = $("cats-list"); el.innerHTML = "";
+    // Tiles removed in an earlier save sit behind a toggle. One removed just now stays in place, as an undo.
+    const shown = c => !c.wasHidden || catShowRemoved;
     catDraft.forEach((c, i) => {
+      if (!shown(c)) return;
       const r = document.createElement("div"); r.className = "cat-row" + (c.hidden ? " off" : "");
       const color = document.createElement("input");
       color.type = "color"; color.value = c.c; color.setAttribute("aria-label", "Kulay ng " + (c.name || "tile"));
@@ -1604,17 +1608,24 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
       name.type = "text"; name.value = c.name; name.maxLength = 24; name.placeholder = "Pangalan"; name.setAttribute("aria-label", "Pangalan ng tile");
       name.addEventListener("input", () => { c.name = name.value; });
       const up = document.createElement("button");
-      up.className = "btn"; up.textContent = "↑"; up.disabled = i === 0; up.setAttribute("aria-label", "Itaas");
-      up.addEventListener("click", () => { [catDraft[i - 1], catDraft[i]] = [catDraft[i], catDraft[i - 1]]; drawCats(); });
+      up.className = "btn"; up.textContent = "↑"; let prev = i - 1;
+      while (prev >= 0 && !shown(catDraft[prev])) prev--;
+      up.disabled = prev < 0; up.setAttribute("aria-label", "Itaas");
+      up.addEventListener("click", () => { [catDraft[prev], catDraft[i]] = [catDraft[i], catDraft[prev]]; drawCats(); });
       const off = document.createElement("button");
       off.className = "btn"; off.textContent = c.hidden ? "Ibalik" : "Remove";
       off.addEventListener("click", () => { c.hidden = !c.hidden; drawCats(); });
       r.append(color, name, up, off);
       el.appendChild(r);
     });
+    const removed = catDraft.filter(c => c.wasHidden).length;
+    const toggle = $("cats-removed");
+    toggle.hidden = !removed;
+    toggle.textContent = catShowRemoved ? "Itago ang tinanggal" : "Tinanggal na tiles (" + removed + ")";
   }
   $("cats-edit").addEventListener("click", () => {
-    catDraft = CATS.map(c => Object.assign({}, c));
+    catDraft = CATS.map(c => Object.assign({}, c, c.hidden ? { wasHidden: true } : {}));
+    catShowRemoved = false;
     $("cats-err").hidden = true;
     drawCats();
     $("cats-wrap").classList.add("show");
@@ -1627,10 +1638,11 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
   });
   const closeCats = () => $("cats-wrap").classList.remove("show");
   $("cats-cancel").addEventListener("click", closeCats);
+  $("cats-removed").addEventListener("click", () => { catShowRemoved = !catShowRemoved; drawCats(); });
   $("cats-save").addEventListener("click", () => {
     const fail = text => { $("cats-err").textContent = text; $("cats-err").hidden = false; };
     const list = catDraft.filter(c => !(c.isNew && (c.hidden || !c.name.trim())))   // an unfinished new tile just goes away
-      .map(c => { const o = Object.assign({}, c, { name: c.name.trim() }); delete o.isNew; if (!o.hidden) delete o.hidden; return o; });
+      .map(c => { const o = Object.assign({}, c, { name: c.name.trim() }); delete o.isNew; delete o.wasHidden; if (!o.hidden) delete o.hidden; return o; });
     if (list.some(c => !c.name)) { fail("May tile na walang pangalan."); return; }
     if (!list.some(c => !c.hidden)) { fail("Kailangan ng kahit isang tile."); return; }
     setCats(list);
