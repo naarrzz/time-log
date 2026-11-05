@@ -1569,6 +1569,7 @@ nav.tabs .badge { position: absolute; top: 1px; left: calc(50% + 6px); min-width
     renderWeek();
     renderSchedules();
     renderGoals();
+    nativeSync();
   }
   function renderGaps() {
     const now = Date.now();
@@ -2624,6 +2625,37 @@ nav.tabs .badge { position: absolute; top: 1px; left: calc(50% + 6px); min-width
   $("gap-prev").addEventListener("click", () => { gapDay = stepDay(gapDay, -1); renderGaps(); });
   $("gap-next").addEventListener("click", () => { gapDay = stepDay(gapDay, 1); renderGaps(); });
 
+  // ---------- native app bridge ----------
+  // Inside the iOS test app, this tells it what's running, for the Lock Screen and widgets. In a browser it does nothing.
+  const nativeBridge = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.timelog;
+  let nativeLast = "", nativePending = null;
+  function nativePost(state) {
+    const text = JSON.stringify(state);
+    if (text !== nativeLast) { nativeLast = text; nativeBridge.postMessage(text); }
+  }
+  function nativeSync() {
+    if (!nativeBridge) return;
+    if (mode === "loading" || (mode === "db" && !syncMeta.current)) return;   // nothing to report until the real state is in
+    if (nativePending) {   // a tap on the Lock Screen or a widget, waiting for the logs to load
+      const { action, id } = nativePending;
+      nativePending = null;
+      if (action === "stop") stopNow();
+      else if (action === "tile" && CAT[id] && !CAT[id].hidden && !(current && current.cat === id)) switchTo(id);
+    }
+    const today = keyOf(Date.now()), c = current && CAT[current.cat];
+    nativePost({
+      running: c ? { id: current.cat, name: c.name, color: c.c, start: tripStart(), logStart: current.start, sub: current.sub || null } : null,
+      tiles: shownCats().map(x => ({ id: x.id, name: x.name, color: x.c })),
+      today: Object.entries(totals(sessionsFor(today, false))).map(([id, ms]) => { const x = CAT[id] || { name: id, c: "#999999" }; return { id, name: x.name, color: x.c, ms }; }),
+      gaps: gapsFor(today).length,
+      day: today
+    });
+  }
+  if (nativeBridge) window.timeLogAction = (action, id) => {
+    if (action === "refresh") nativeLast = ""; else nativePending = { action, id };
+    render();
+  };
+
   // ---------- boot ----------
   render();
   setInterval(() => {
@@ -2642,6 +2674,7 @@ nav.tabs .badge { position: absolute; top: 1px; left: calc(50% + 6px); min-width
     $("app").hidden = true;
     $("tabs").hidden = true;
     $("login").hidden = false;
+    if (nativeBridge) nativePost({ running: null, tiles: [], today: [], gaps: 0, day: "" });   // signed out: nothing should stay on the Lock Screen
     $("login-err").hidden = !error;
     $("login-err").textContent = error || "";
   }
