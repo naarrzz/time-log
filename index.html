@@ -153,7 +153,9 @@ header.top .date { color: var(--ink-soft); font-size: 13px; font-weight: 600; }
 .toast p { margin: 0; font-size: 14px; }
 .toast .btn { background: rgba(255,255,255,.14); color: var(--toast-ink); }
 .toast-time { font: 16px var(--body); color: var(--toast-ink); background: rgba(255,255,255,.1); color-scheme: dark; border: 1px solid var(--toast-line); border-radius: 10px; padding: 6px 10px; min-height: 36px; }
-.sheet-wrap { position: fixed; inset: 0; background: rgba(0,0,0,.35); display: none; align-items: flex-end; justify-content: center; z-index: 30; }
+/* Top and height follow the visible part of the screen, so a sheet sits above the keyboard (set in the sheets section of the script).
+   The shadow keeps the dim going behind the keyboard. */
+.sheet-wrap { position: fixed; left: 0; right: 0; top: var(--vv-top, 0px); height: var(--vv-h, 100%); background: rgba(0,0,0,.35); box-shadow: 0 0 0 100vmax rgba(0,0,0,.35); display: none; align-items: flex-end; justify-content: center; z-index: 30; }
 .sheet-wrap.show { display: flex; }
 .sheet { background: var(--bg); width: min(520px, 100%); border-radius: 14px 14px 0 0; padding: 18px 16px calc(24px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 14px; max-height: 90%; overflow: auto; }
 .sheet h3 { font-family: var(--display); margin: 0; font-size: 20px; font-weight: 700; letter-spacing: -0.01em; }
@@ -515,7 +517,7 @@ nav.tabs .badge { position: absolute; top: 1px; left: calc(50% + 6px); min-width
     <h3 id="new-tile-title">New tile, anong ganap?</h3>
     <div class="cat-row" style="grid-template-columns:40px 1fr">
       <input type="color" id="new-tile-color" aria-label="Kulay ng tile">
-      <input type="text" id="new-tile-name" maxlength="24" placeholder="Pangalan" aria-label="Pangalan ng tile">
+      <input type="text" id="new-tile-name" maxlength="24" placeholder="Pangalan" aria-label="Pangalan ng tile" autocomplete="off">
     </div>
     <p class="sync warn" id="new-tile-err" role="alert" style="margin:0" hidden></p>
     <div class="chips">
@@ -1685,6 +1687,22 @@ nav.tabs .badge { position: absolute; top: 1px; left: calc(50% + 6px); min-width
     el.addEventListener("animationend", () => el.classList.remove(cls), { once: true });
   }
 
+  // ---------- sheets and the keyboard ----------
+  // iOS doesn't shrink the page for the keyboard, so a sheet at the bottom would end up under it.
+  // This keeps sheets inside the part of the screen you can see.
+  if (window.visualViewport) {
+    const vv = window.visualViewport, rootStyle = document.documentElement.style;
+    const fitSheets = () => { rootStyle.setProperty("--vv-top", vv.offsetTop + "px"); rootStyle.setProperty("--vv-h", vv.height + "px"); };
+    vv.addEventListener("resize", fitSheets);
+    vv.addEventListener("scroll", fitSheets);
+    fitSheets();
+  }
+  // In a long sheet, bring the field you tapped into view once the keyboard is up.
+  document.addEventListener("focusin", e => {
+    if (!e.target.closest(".sheet-wrap") || !e.target.matches('input:not([type="color"])')) return;
+    setTimeout(() => e.target.scrollIntoView({ block: "nearest" }), 350);
+  });
+
   // ---------- tile ripple ----------
   document.addEventListener("pointerdown", e => {
     const tile = e.target.closest && e.target.closest(".tile");
@@ -2240,7 +2258,7 @@ nav.tabs .badge { position: absolute; top: 1px; left: calc(50% + 6px); min-width
       color.type = "color"; color.value = c.c; color.setAttribute("aria-label", "Kulay ng " + (c.name || "tile"));
       color.addEventListener("input", () => { c.c = color.value; });
       const name = document.createElement("input");
-      name.type = "text"; name.value = c.name; name.maxLength = 24; name.placeholder = "Pangalan"; name.setAttribute("aria-label", "Pangalan ng tile");
+      name.type = "text"; name.autocomplete = "off"; name.value = c.name; name.maxLength = 24; name.placeholder = "Pangalan"; name.setAttribute("aria-label", "Pangalan ng tile");
       name.addEventListener("input", () => { c.name = name.value; });
       const toggle = document.createElement("button");
       toggle.className = "btn";
