@@ -195,6 +195,11 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
 .quiz-group { display: flex; flex-direction: column; gap: 12px; }
 .quiz-add { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
 .quiz-add input { font: 16px var(--body); color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; min-width: 0; }
+/* Specifically and Kasabay stay folded, so the tiles stay near the top */
+.extras { display: flex; flex-wrap: wrap; gap: 8px; margin-top: -6px; }
+.extras .btn { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-soft); }
+.extras .btn.set { color: var(--ink); border-color: var(--ink-soft); }
+.extras .btn[aria-expanded="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
 /* Sub-labels */
 .sub-input { font: 16px var(--body); color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 7px 10px; min-width: 0; flex: 1 1 120px; }
 .cat-subs { grid-column: 1 / -1; font: 16px var(--body); color: var(--ink); background: transparent; border: 0; border-bottom: 1px solid var(--line); padding: 2px 2px 8px; min-width: 0; width: 100%; }
@@ -287,6 +292,11 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
           <div class="chips live-actions"><button class="btn stop" id="live-edit" hidden>Edit</button><button class="btn stop" id="stop-btn" hidden>Stop na</button></div>
         </div>
       </div>
+      <div class="extras" id="live-extras" hidden>
+        <button class="btn" id="extra-subs" type="button"></button>
+        <button class="btn" id="extra-kas" type="button"></button>
+      </div>
+      <p class="sync" id="extra-hint" style="margin:-8px 0 -6px" hidden></p>
       <div class="tagrow" id="live-subs" hidden></div>
       <div class="tagrow" id="live-tags" hidden></div>
       <div>
@@ -517,7 +527,7 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
   const days = {};               // key -> sessions[]
   const kasDays = {};            // key -> finished Kasabay [{ id, c, cat, start, end }]
   let lastClosed = null;         // { key, id } of the session closed by the latest switch
-  let toastTap = 0, toastTimer = null, kasTap = 0, showAllKas = false, kasPop = null, liveShown = null, liveChipSig = "", lastSwitch = null, liveSubSig = null, subAdding = false;
+  let toastTap = 0, toastTimer = null, kasTap = 0, showAllKas = false, kasPop = null, liveShown = null, liveChipSig = "", lastSwitch = null, liveSubSig = null, subAdding = false, liveOpen = null;
   let gapDay = "today", skipped = new Set();
   let editing = null;            // { key, id }
 
@@ -737,9 +747,9 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
       return;
     }
     current.kas = (current.kas || []).concat([{ cat, start: resumeStart(cat, now) }]);
-    kasTap = now; kasPop = cat;
+    kasTap = now; kasPop = cat; liveOpen = null;
     saveCurrent(); render();
-    showToast(CAT[current.cat].name + " + " + CAT[cat].name + "? Multitasker ka ah. Kanina pa ba 'yan?", [15, 30, 60], m => backdateKas(cat, m), now);
+    showToast(CAT[current.cat].name + " + " + CAT[cat].name + "? Multitasker ka ah.", [15, 30, 60], m => backdateKas(cat, m), now);
   }
   function backdateKas(cat, mins) {
     const k = current && (current.kas || []).find(x => x.cat === cat);
@@ -792,12 +802,28 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
       addSession(current.cat, current.start, now, current.sub);
       current.start = now; current.sub = sub; toastTap = now;
     } else current.sub = sub;
+    liveOpen = null;
     saveCurrent(); render();
     if (current.sub) showToast(current.sub + ", noted!", []);
   }
+  // One line under the live card. Each side opens its chips only when tapped.
+  function drawExtras(running) {
+    $("live-extras").hidden = false;
+    const subs = $("extra-subs"), kas = $("extra-kas");
+    subs.textContent = current.sub ? "Specifically: " + current.sub : "+ Specifically";
+    kas.textContent = !running.length ? "+ Kasabay" : "Kasabay: " + CAT[running[0].cat].name + (running.length > 1 ? " +" + (running.length - 1) : "");
+    subs.classList.toggle("set", !!current.sub);
+    kas.classList.toggle("set", running.length > 0);
+    subs.setAttribute("aria-expanded", liveOpen === "subs" ? "true" : "false");
+    kas.setAttribute("aria-expanded", liveOpen === "kas" ? "true" : "false");
+    $("live-subs").hidden = liveOpen !== "subs";
+    $("live-tags").hidden = liveOpen !== "kas";
+    const hint = $("extra-hint");
+    hint.hidden = !liveOpen;
+    hint.textContent = liveOpen === "subs" ? "Optional: ano exactly ang ginagawa mo?" : "Ano pa ang ginagawa mo nang sabay? Hindi ito dagdag sa oras mo, pero makikita kung nahati ang atensyon mo.";
+  }
   function drawLiveSubs() {
     const el = $("live-subs"), subs = subsOf(CAT[current.cat]);
-    el.hidden = false;      // every tile can be specific; one with no labels yet just offers + Add
     const sig = [current.cat, subs.join("|"), current.sub || "", subAdding].join("~");
     if (sig === liveSubSig) return;     // an open text box survives re-renders
     liveSubSig = sig;
@@ -866,10 +892,10 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
     resumed.forEach(c => { if (!kas.some(k => k.cat === c)) kas.push({ cat: c, start: now }); });
     if (back) kas.forEach(k => { k.start = resumeStart(k.cat, now); });
     current = { cat, start: now, kas, sub: back ? back.sub : undefined };
-    toastTap = now;
+    toastTap = now; liveOpen = null;
     saveCurrent(); render();
     if (resumed.length) { showToast("Balik sa " + CAT[cat].name + ". Tuloy ang Kasabay: " + resumed.map(c => CAT[c].name).join(", ") + ".", []); return; }
-    showToast(CAT[cat].name + ", noted!" + (kas.length ? " Kasabay ng " + kas.map(k => CAT[k.cat].name).join(", ") + "." : "") + " Kanina pa ba 'yan?", [15, 30, 60]);
+    showToast(CAT[cat].name + ", noted!" + (kas.length ? " Kasabay ng " + kas.map(k => CAT[k.cat].name).join(", ") + "." : ""), [15, 30, 60]);
   }
   function stopNow() {
     if (!current) return;
@@ -958,13 +984,20 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
       b.addEventListener("click", fn);
       chips.appendChild(b);
     };
-    if (mins.length) add("Nope, ngayon lang", hideToast);
-    mins.forEach(m => add(m === 60 ? "1 hour na" : m + " mins na", () => (onPick || backdate)(m)));
-    if (mins.length) add("Pili akong time", () => askStartTime(onPick, tap || toastTap, tap || toastTap));
+    // Most taps are "just now", so the options stay folded behind one chip.
+    if (mins.length) add("Kanina pa?", () => {
+      $("toast-text").textContent = "Kanina pa ba 'yan?";
+      chips.innerHTML = "";
+      add("Nope, ngayon lang", hideToast);
+      mins.forEach(m => add(m === 60 ? "1 hour na" : m + " mins na", () => (onPick || backdate)(m)));
+      add("Pili akong time", () => askStartTime(onPick, tap || toastTap, tap || toastTap));
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(hideToast, 8000);
+    });
     chips.hidden = !mins.length;
     $("toast").classList.add("show");
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => $("toast").classList.remove("show"), mins.length ? 7000 : 2500);
+    toastTimer = setTimeout(hideToast, mins.length ? 4000 : 2500);
   }
 
   // A delete can be taken back for a few seconds.
@@ -1117,9 +1150,9 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
       $("live-timer").textContent = fmtClock(now - chain);
       $("stop-btn").hidden = false;
       $("live-edit").hidden = false;
-      $("live-tags").hidden = false;
       drawLiveSubs();
       const running = activeKas();
+      drawExtras(running);
       const others = shownCats().map(x => x.id).filter(id => id !== current.cat);
       const onNow = id => running.some(k => k.cat === id);
       const cats = showAllKas ? others : others.filter(id => KAS_QUICK.includes(id) || onNow(id));
@@ -1144,6 +1177,7 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
     } else {
       $("live-tags").hidden = true;
       $("live-subs").hidden = true; liveSubSig = null; subAdding = false;
+      $("live-extras").hidden = true; $("extra-hint").hidden = true; liveOpen = null;
       $("live-swatch").style.background = "var(--line)";
       $("live-label").textContent = "Wala kang ganap?";
       $("live-cat").textContent = "Tap ka lang sa baba";
@@ -1856,6 +1890,8 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
     showUndo("Tanggal na ang log.", () => { days[key] = before; kasDays[key] = kasBefore; saveDay(key); });
   });
   $("stop-btn").addEventListener("click", stopNow);
+  $("extra-subs").addEventListener("click", () => { liveOpen = liveOpen === "subs" ? null : "subs"; render(); });
+  $("extra-kas").addEventListener("click", () => { liveOpen = liveOpen === "kas" ? null : "kas"; render(); });
   $("live-edit").addEventListener("click", () => {
     if (!current) return;
     toastTap = Date.now();
