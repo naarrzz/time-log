@@ -159,7 +159,10 @@ header.top .date { color: var(--ink-soft); font-size: 13px; font-weight: 600; }
    The shadow keeps the dim going behind the keyboard. */
 .sheet-wrap { position: fixed; left: 0; right: 0; top: var(--vv-top, 0px); height: var(--vv-h, 100%); background: rgba(0,0,0,.35); box-shadow: 0 0 0 100vmax rgba(0,0,0,.35); display: none; align-items: flex-end; justify-content: center; z-index: 30; }
 .sheet-wrap.show { display: flex; }
-.sheet { background: var(--bg); width: min(520px, 100%); border-radius: 14px 14px 0 0; padding: 18px 16px calc(24px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 14px; max-height: 90%; overflow: auto; }
+.sheet { background: var(--bg); width: min(520px, 100%); border-radius: 14px 14px 0 0; padding: 18px 16px calc(24px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 14px; max-height: min(90%, calc(100% - env(safe-area-inset-top) - 16px)); overflow: auto; }
+.sheet input { scroll-margin: 16px; }
+/* With the keyboard up, iOS shows the page in the strip between the sheet and the keyboard, and nothing fixed can cover it. So the page steps aside. */
+.typing .app, .typing nav.tabs { visibility: hidden; }
 .sheet h3 { font-family: var(--display); margin: 0; font-size: 20px; font-weight: 700; letter-spacing: -0.01em; }
 .sheet-wrap.center { align-items: center; padding: 16px; }
 /* Centered pop ups, like iOS 26 alerts: very round, left-aligned text, and capsule buttons side by side.
@@ -1187,7 +1190,7 @@ nav.tabs .badge { position: absolute; top: 1px; left: calc(50% + 6px); min-width
     no.addEventListener("click", hideToast);
     ok.addEventListener("click", () => {
       const [h, m] = input.value.split(":").map(Number);
-      if (isNaN(h) || isNaN(m)) return;
+      if (isNaN(h) || isNaN(m)) { $("toast-text").textContent = "Lagyan muna ng oras."; return; }
       let t = new Date(tap).setHours(h, m, 0, 0);
       if (t > tap) t -= DAY;                     // 11:50 PM picked at 12:10 AM means last night
       if (tap - t > 12 * HOUR) { $("toast-text").textContent = "Time traveler ka? Mamaya pa 'yan. Pili ulit."; return; }
@@ -1300,9 +1303,12 @@ nav.tabs .badge { position: absolute; top: 1px; left: calc(50% + 6px); min-width
   function tripStart() {
     if (!current) return 0;
     let st = current.start;
-    (days[keyOf(st)] || []).slice().sort((a, b) => b.start - a.start).forEach(s => {
-      if (s.cat === current.cat && s.end <= st && st - s.end < TRIP_GAP) st = s.start;
-    });
+    // Another tile in between ends the trip, same as in the list of logs.
+    for (const s of (days[keyOf(st)] || []).slice().sort((a, b) => b.start - a.start)) {
+      if (s.end > st) continue;
+      if (s.cat !== current.cat || st - s.end >= TRIP_GAP) break;
+      st = s.start;
+    }
     return st;
   }
   function groupTrips(list) {
@@ -1636,7 +1642,7 @@ nav.tabs .badge { position: absolute; top: 1px; left: calc(50% + 6px); min-width
     for (let i = 0; i < g.times; i++) {
       const track = document.createElement("div"); track.className = "goal-track";
       const fill = document.createElement("div"); fill.className = "goal-fill"; fill.style.background = c.c;
-      fill.style.width = (i < hit ? 100 : i === hit ? Math.min(100, todayMs / dayMs * 100) : 0) + "%";
+      fill.style.width = (i < hit ? 100 : i === hit && todayMs < dayMs ? todayMs / dayMs * 100 : 0) + "%";   // a day already hit is counted in hit
       // The sweep crosses the pieces one after another, in the same .45s as a full bar.
       fill.style.animationDuration = (.45 / g.times) + "s";
       fill.style.animationDelay = (.45 / g.times * i) + "s";
@@ -1750,15 +1756,27 @@ nav.tabs .badge { position: absolute; top: 1px; left: calc(50% + 6px); min-width
   if (window.visualViewport) {
     const vv = window.visualViewport, rootStyle = document.documentElement.style;
     const fitSheets = () => { rootStyle.setProperty("--vv-top", vv.offsetTop + "px"); rootStyle.setProperty("--vv-h", vv.height + "px"); };
-    vv.addEventListener("resize", fitSheets);
+    vv.addEventListener("resize", () => {
+      fitSheets();
+      const field = sheetField(document.activeElement);
+      document.documentElement.classList.toggle("typing", !!field && vv.height < window.innerHeight - 100);
+      if (field) { field.scrollIntoView({ block: "nearest" }); return; }   // the sheet just got shorter, so the field may be under it now
+      if (pageBefore !== null && vv.height >= window.innerHeight - 1) { window.scrollTo(0, pageBefore); pageBefore = null; }
+    });
     vv.addEventListener("scroll", fitSheets);
     fitSheets();
   }
   // In a long sheet, bring the field you tapped into view once the keyboard is up.
+  // iOS also scrolls the page behind the sheet to make room, so that goes back once the keyboard closes.
+  function sheetField(el) { return el && el.closest && el.closest(".sheet-wrap") && el.matches('input:not([type="color"])') ? el : null; }
+  let pageBefore = null;
   document.addEventListener("focusin", e => {
-    if (!e.target.closest(".sheet-wrap") || !e.target.matches('input:not([type="color"])')) return;
-    setTimeout(() => e.target.scrollIntoView({ block: "nearest" }), 350);
+    if (!sheetField(e.target)) return;
+    if (!document.documentElement.classList.contains("typing")) pageBefore = window.scrollY;   // moving between fields keeps the first one
+    setTimeout(() => { if (document.activeElement === e.target) e.target.scrollIntoView({ block: "nearest" }); }, 350);
   });
+  // A time wheel opens no keyboard, so there's nothing to put back.
+  document.addEventListener("focusout", () => { if (!document.documentElement.classList.contains("typing")) pageBefore = null; });
 
   // ---------- tile ripple ----------
   document.addEventListener("pointerdown", e => {
@@ -1921,9 +1939,10 @@ nav.tabs .badge { position: absolute; top: 1px; left: calc(50% + 6px); min-width
     del.addEventListener("click", () => {
       const name = (CAT[k.cat] || { name: k.cat }).name;
       if (k.running) {
-        const gone = (current.kas || []).find(x => x.cat === k.cat), mine = current;
+        const gone = (current.kas || []).find(x => x.cat === k.cat), cat = current.cat, start = current.start;
         current.kas = current.kas.filter(x => x !== gone); saveCurrent();
-        showUndo("Tanggal na ang " + name + ".", () => { if (current === mine && gone) { current.kas = (current.kas || []).concat([gone]); saveCurrent(); } });
+        // Each save swaps current for a fresh copy, so check that it's the same log by what it is.
+        showUndo("Tanggal na ang " + name + ".", () => { if (current && current.cat === cat && current.start === start && gone) { current.kas = (current.kas || []).concat([gone]); saveCurrent(); } });
       } else {
         const before = (kasDays[key] || []).slice();
         kasDays[key] = before.filter(x => x.id !== k.id); saveDay(key);
@@ -2306,7 +2325,7 @@ nav.tabs .badge { position: absolute; top: 1px; left: calc(50% + 6px); min-width
       body.appendChild(group);
     } else {
       $("quiz-title").textContent = "May fixed na oras ka ba?";
-      $("quiz-sub").textContent = "Gaya ng trabaho o klase. Kusa itong magiging Kasabay sa mga oras na 'yon. Optional lang, at pwedeng dagdagan sa Week tab.";
+      $("quiz-sub").textContent = "Gaya ng trabaho o klase. Kusa itong magiging Kasabay sa mga oras na 'yon. Optional lang, at pwedeng dagdagan sa Settings.";
       $("quiz-next").textContent = "Let's go";
       const group = document.createElement("div"); group.className = "quiz-group";
       quizChips(group, quiz.tiles.map(id => ({ id, label: quizLabel(id) })), id => quiz.schedCat === id, id => { quiz.schedCat = quiz.schedCat === id ? null : id; });
@@ -2480,6 +2499,8 @@ nav.tabs .badge { position: absolute; top: 1px; left: calc(50% + 6px); min-width
       .map(c => { const o = Object.assign({}, c, { name: c.name.trim() }); delete o.isNew; delete o.wasHidden; if (!o.hidden) delete o.hidden; return o; });
     if (list.some(c => !c.name)) { fail("May tile na walang pangalan."); return; }
     if (!list.some(c => !c.hidden)) { fail("Kailangan ng kahit isang tile."); return; }
+    const names = list.filter(c => !c.hidden).map(c => c.name.toLowerCase());
+    if (new Set(names).size !== names.length) { fail("May dalawang tile na pareho ang pangalan."); return; }
     setCats(list);
     saveCats();
     closeCats(); render();
@@ -2571,6 +2592,7 @@ nav.tabs .badge { position: absolute; top: 1px; left: calc(50% + 6px); min-width
     if (current) $("live-timer").textContent = fmtClock(Date.now() - tripStart());
   }, 1000);
   setInterval(render, 60000);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) render(); });   // timers pause in the background
 
   function showApp() {
     $("login").hidden = true;
