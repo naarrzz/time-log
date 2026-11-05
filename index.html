@@ -149,7 +149,7 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
 .tagrow { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .tagrow .lbl { font-size: 12px; color: var(--ink-soft); margin-right: 2px; }
 .btn.tag[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
-.btn.tag[aria-pressed="true"]::before { content: ""; display: inline-block; width: 7px; height: 7px; margin-right: 6px; border-radius: 50%; background: currentColor; vertical-align: 1px; animation: pulse 1.6s ease-in-out infinite; }
+.btn.tag:not(.plain)[aria-pressed="true"]::before { content: ""; display: inline-block; width: 7px; height: 7px; margin-right: 6px; border-radius: 50%; background: currentColor; vertical-align: 1px; animation: pulse 1.6s ease-in-out infinite; }
 .btn.tag.pop { animation: pop .22s ease-out; }
 .sub-h { font-size: 12px; color: var(--ink-soft); margin: 14px 0 0; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
 /* Login */
@@ -310,6 +310,12 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
         <div id="week-tags"></div>
       </div>
       <div class="card">
+        <h2>Auto-Kasabay</h2>
+        <p class="empty" style="margin-bottom:10px">May work o klase na fixed ang oras? Kusa itong magka-Kasabay sa mga oras na 'yon.</p>
+        <div class="rows" id="sched-list" style="margin-top:0"></div>
+        <div class="chips" style="margin-top:10px"><button class="btn" id="sched-add">+ Add schedule</button></div>
+      </div>
+      <div class="card">
         <h2>Itsura</h2>
         <div class="seg" id="theme-seg" role="group" aria-label="Theme">
           <button data-theme-pick="auto">Auto</button>
@@ -374,6 +380,27 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
   </div>
 </div>
 
+<div class="sheet-wrap" id="sched-wrap">
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="sched-title">
+    <h3 id="sched-title">Schedule</h3>
+    <div><p class="sub-h" style="margin:0 0 8px">Anong tile?</p><div class="chips" id="sched-cats"></div></div>
+    <div><p class="sub-h" style="margin:0 0 8px">Anong araw?</p><div class="chips" id="sched-days"></div></div>
+    <div class="time-row">
+      <label>Start <input type="time" id="sched-start"></label>
+      <label>End <input type="time" id="sched-end"></label>
+    </div>
+    <div class="time-row">
+      <label>Last day (optional) <input type="date" id="sched-until"></label>
+    </div>
+    <p class="sync warn" id="sched-err" role="alert" style="margin:0" hidden></p>
+    <div class="chips">
+      <button class="btn" id="sched-delete">Delete</button>
+      <button class="btn" id="sched-cancel">Nvm</button>
+      <button class="btn primary" id="sched-save">Save</button>
+    </div>
+  </div>
+</div>
+
 <nav class="tabs" id="tabs" hidden><div class="in">
   <button id="tab-now" class="on">Ngayon</button>
   <button id="tab-gaps">Gaps<span class="badge" id="gap-badge" hidden></span></button>
@@ -404,7 +431,6 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
   function setCats(list) { CATS = list; CAT = Object.fromEntries(list.map(c => [c.id, c])); }
   setCats(DEFAULT_CATS);
   const shownCats = () => CATS.filter(c => !c.hidden);
-  const standbyOn = () => CAT.intern && !CAT.intern.hidden;
   const MIN = 60000, HOUR = 3600000, DAY = 86400000;
   const GAP_MIN = 15 * MIN;
 
@@ -412,16 +438,25 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
   // It never adds time to totals. Main activity = where the attention is; Kasabay = what's dividing it.
   const KAS_QUICK = ["scroll", "kain", "intern"];                // shown first; the rest sit behind "Iba pa"
   const TAG_CAT = { kain: "kain", fin: "intern" };               // old whole-log tags -> category
-  const WORK_UNTIL = new Date(2026, 10, 13, 23, 59).getTime();   // internship ends Nov 13
-  // Internship hours on the day of t, or null if that day has none.
-  const workSpan = t => {
-    const d = new Date(t), wd = d.getDay();
-    if (t > WORK_UNTIL || wd < 1 || wd > 5) return null;
-    return [new Date(d).setHours(9, 0, 0, 0), new Date(d).setHours(18, 0, 0, 0)];
+  // Schedules auto-start a Kasabay: a tile, days of the week, a daily time, and an optional last day.
+  let schedules = [];            // [{ id, cat, days: [0-6], start: "09:00", end: "18:00", until?: "2026-11-13" }]
+  const atHM = (t, hm) => { const [h, m] = hm.split(":").map(Number); return new Date(t).setHours(h, m, 0, 0); };
+  // A schedule's time window on the day of t, or null if it doesn't run that day.
+  function schedSpan(s, t) {
+    if (!CAT[s.cat] || CAT[s.cat].hidden || !s.days.includes(new Date(t).getDay())) return null;
+    if (s.until && keyOf(t) > s.until) return null;
+    return [atHM(t, s.start), atHM(t, s.end)];
+  }
+  const autoKas = (cat, t) => {
+    const out = [];
+    schedules.forEach(s => {
+      const w = schedSpan(s, t);
+      if (w && s.cat !== cat && t >= w[0] && t < w[1] && !out.some(k => k.cat === s.cat)) out.push({ cat: s.cat, start: t, auto: true, stop: w[1] });
+    });
+    return out;
   };
-  const inWorkHours = t => { const w = workSpan(t); return !!w && t >= w[0] && t < w[1]; };
-  const autoKas = (cat, t) => (cat !== "intern" && standbyOn() && inWorkHours(t)) ? [{ cat: "intern", start: t, auto: true }] : [];
-  const kasEnd = (k, t) => k.auto && workSpan(k.start) ? Math.min(t, workSpan(k.start)[1]) : t;   // auto standby stops at 6 PM
+  // An auto Kasabay stops when its schedule does. Older saved ones have no stop, and came from the 9-6 internship.
+  const kasEnd = (k, t) => { const stop = !k.auto ? null : k.stop || new Date(k.start).setHours(18, 0, 0, 0); return stop ? Math.min(t, stop) : t; };
   const createdOf = s => s.c || (s.id && s.id.length > 5 ? parseInt(s.id.slice(0, -5), 36) : 0) || 0;
 
   // ---------- state ----------
@@ -461,7 +496,7 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
   };
   let auth = null, db = null, root = "", mode = "loading";
   function localSave() {
-    try { localStorage.setItem("oraslog", JSON.stringify({ current, days, kasabay: kasDays, cats: CATS })); } catch (e) {}
+    try { localStorage.setItem("oraslog", JSON.stringify({ current, days, kasabay: kasDays, cats: CATS, schedules })); } catch (e) {}
   }
   function parseCurrent(b) {
     if (!b || b.active === false || !b.cat) return null;
@@ -470,7 +505,7 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
     return { cat: b.cat, start: b.start, kas };
   }
   function localLoad() {
-    try { const raw = localStorage.getItem("oraslog"); if (raw) { const o = JSON.parse(raw); current = parseCurrent(o.current); Object.assign(days, o.days || {}); Object.assign(kasDays, o.kasabay || {}); if (Array.isArray(o.cats) && o.cats.length) setCats(o.cats); } } catch (e) {}
+    try { const raw = localStorage.getItem("oraslog"); if (raw) { const o = JSON.parse(raw); current = parseCurrent(o.current); Object.assign(days, o.days || {}); Object.assign(kasDays, o.kasabay || {}); if (Array.isArray(o.cats) && o.cats.length) setCats(o.cats); if (Array.isArray(o.schedules)) schedules = o.schedules; } } catch (e) {}
     Object.keys(days).forEach(k => { if (normalizeDay(k)) saveDay(k); });
   }
   function saveDay(key) {
@@ -487,6 +522,11 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
     if (mode !== "db") { localSave(); return Promise.resolve(); }
     const body = current ? { active: true, cat: current.cat, start: current.start, kas: current.kas || [] } : { active: false };
     return db.doc(root + "/state/current").set(body).catch(onWriteError);
+  }
+  // Separate from the day docs, so an older version writing a day can never wipe it.
+  function saveSchedules() {
+    if (mode !== "db") { localSave(); return; }
+    db.doc(root + "/state/schedules").set({ list: schedules }).catch(onWriteError);
   }
   function saveCats() {
     if (mode !== "db") { localSave(); return; }
@@ -666,7 +706,7 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
     current = { cat, start: now, kas };
     toastTap = now;
     saveCurrent(); render();
-    showToast(CAT[cat].name + ", noted!" + (kas.length ? " Kasabay ng " + CAT.intern.name + "." : "") + " Kanina pa ba 'yan?", [15, 30, 60]);
+    showToast(CAT[cat].name + ", noted!" + (kas.length ? " Kasabay ng " + kas.map(k => CAT[k.cat].name).join(", ") + "." : "") + " Kanina pa ba 'yan?", [15, 30, 60]);
   }
   function stopNow() {
     if (!current) return;
@@ -686,7 +726,10 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
     const moved = newStart < current.start;
     current.start = newStart;
     (current.kas || []).forEach(k => {
-      if (k.auto && moved) { const w = workSpan(newStart); if (w) k.start = Math.max(newStart, w[0]); }
+      if (k.auto && moved) {
+        const s = schedules.find(x => x.cat === k.cat), w = s && schedSpan(s, newStart);
+        if (w) k.start = Math.max(newStart, w[0]);
+      }
       k.start = Math.max(k.start, newStart);    // a Kasabay can't start before the main activity
     });
     saveCurrent(); render();
@@ -964,6 +1007,7 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
 
     renderGaps();
     renderWeek();
+    renderSchedules();
   }
   function renderGaps() {
     const now = Date.now();
@@ -984,8 +1028,10 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
     const gt = $("gap-tiles"); gt.innerHTML = "";
     shownCats().forEach(c => gt.appendChild(tileButton(c, () => {
       addSession(c.id, g.start, g.end);
-      const w = c.id !== "intern" && standbyOn() && workSpan(g.start);
-      if (w) addKas("intern", Math.max(g.start, w[0]), Math.min(g.end, w[1]));
+      schedules.forEach(s => {
+        const w = s.cat !== c.id && schedSpan(s, g.start);
+        if (w && Math.min(g.end, w[1]) > Math.max(g.start, w[0])) addKas(s.cat, Math.max(g.start, w[0]), Math.min(g.end, w[1]));
+      });
       render(); showToast(fmtDur(g.end - g.start) + " na " + c.name + ". Sakto, noted!", []);
     }, false)));
     $("gap-skip").onclick = () => { skipped.add(key + ":" + g.start); renderGaps(); };
@@ -1183,7 +1229,7 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
       ns = Math.max(ns, r.start); ne = Math.min(ne, r.end);
       if (k.running) {
         const live = (current.kas || []).find(x => x.cat === k.cat);
-        if (live) { live.start = Math.max(ns, current.start); delete live.auto; saveCurrent(); }
+        if (live) { live.start = Math.max(ns, current.start); saveCurrent(); }
       } else {
         const stored = (kasDays[key] || []).find(x => x.id === k.id);
         if (stored) { stored.start = ns; stored.end = ne; saveDay(key); }
@@ -1246,6 +1292,87 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
     touched.forEach(k => saveDay(k));
     closeSheet(); render();
     showToast("Goods, naayos na.", []);
+  });
+
+  // ---------- schedules ----------
+  const hmLabel = hm => fmtTime(atHM(Date.now(), hm));
+  function daysLabel(days) {
+    const d = days.slice().sort((a, b) => a - b).join();
+    if (d === "1,2,3,4,5") return "Mon–Fri";
+    if (d === "0,6") return "Sat–Sun";
+    if (d === "0,1,2,3,4,5,6") return "Every day";
+    return days.slice().sort((a, b) => a - b).map(i => DOW[i]).join(", ");
+  }
+  function renderSchedules() {
+    const el = $("sched-list"); el.innerHTML = "";
+    if (!schedules.length) { const p = document.createElement("p"); p.className = "empty"; p.textContent = "Wala pa."; el.appendChild(p); return; }
+    schedules.forEach(s => {
+      const c = CAT[s.cat] || { name: s.cat, c: "#999" };
+      const row = document.createElement("div"); row.className = "kas-row";
+      const head = document.createElement("button"); head.className = "kas-head"; head.type = "button";
+      const dot = document.createElement("span"); dot.className = "dot"; dot.style.background = c.c;
+      const n = document.createElement("span");
+      const nn = document.createElement("div"); nn.className = "n"; nn.textContent = c.name;
+      const ss = document.createElement("div"); ss.className = "s";
+      const [y, m, d] = (s.until || "").split("-").map(Number);
+      ss.textContent = daysLabel(s.days) + ", " + hmLabel(s.start) + " – " + hmLabel(s.end) + (s.until ? ", until " + MON[m - 1] + " " + d + (y !== new Date().getFullYear() ? " " + y : "") : "");
+      n.append(nn, ss);
+      const v = document.createElement("span"); v.className = "v"; v.textContent = s.until && keyOf(Date.now()) > s.until ? "Tapos na" : "";
+      head.append(dot, n, v);
+      head.addEventListener("click", () => openSchedule(s.id));
+      row.appendChild(head);
+      el.appendChild(row);
+    });
+  }
+  let schedDraft = null;
+  function drawSchedDraft() {
+    const pick = (el, items, isOn, onTap) => {
+      el.innerHTML = "";
+      items.forEach(it => {
+        const b = document.createElement("button");
+        b.className = "btn tag plain"; b.textContent = it.label;
+        b.setAttribute("aria-pressed", isOn(it.id) ? "true" : "false");
+        b.addEventListener("click", () => { onTap(it.id); drawSchedDraft(); });
+        el.appendChild(b);
+      });
+    };
+    pick($("sched-cats"), shownCats().map(c => ({ id: c.id, label: c.name })), id => schedDraft.cat === id, id => { schedDraft.cat = id; });
+    pick($("sched-days"), [1, 2, 3, 4, 5, 6, 0].map(i => ({ id: i, label: DOW[i] })), i => schedDraft.days.includes(i), i => {
+      schedDraft.days = schedDraft.days.includes(i) ? schedDraft.days.filter(x => x !== i) : schedDraft.days.concat([i]);
+    });
+  }
+  function openSchedule(id) {
+    const s = schedules.find(x => x.id === id);
+    schedDraft = s ? { id: s.id, cat: s.cat, days: s.days.slice() } : { id: uid(), cat: null, days: [1, 2, 3, 4, 5], isNew: true };
+    $("sched-start").value = s ? s.start : "09:00";
+    $("sched-end").value = s ? s.end : "18:00";
+    $("sched-until").value = s && s.until ? s.until : "";
+    $("sched-delete").hidden = !s;
+    $("sched-err").hidden = true;
+    drawSchedDraft();
+    $("sched-wrap").classList.add("show");
+  }
+  const closeSchedule = () => { $("sched-wrap").classList.remove("show"); schedDraft = null; };
+  $("sched-add").addEventListener("click", () => openSchedule(null));
+  $("sched-cancel").addEventListener("click", closeSchedule);
+  $("sched-wrap").addEventListener("click", e => { if (e.target.id === "sched-wrap") closeSchedule(); });
+  $("sched-delete").addEventListener("click", () => {
+    schedules = schedules.filter(x => x.id !== schedDraft.id);
+    saveSchedules(); closeSchedule(); renderSchedules();
+    showToast("Okay, tanggal na ang schedule.", []);
+  });
+  $("sched-save").addEventListener("click", () => {
+    const fail = text => { $("sched-err").textContent = text; $("sched-err").hidden = false; };
+    const start = $("sched-start").value, end = $("sched-end").value, until = $("sched-until").value;
+    if (!schedDraft.cat) { fail("Pili muna ng tile."); return; }
+    if (!schedDraft.days.length) { fail("Pili kahit isang araw."); return; }
+    if (!start || !end) { fail("Lagyan muna ng oras."); return; }
+    if (end <= start) { fail("Dapat mas maaga ang start kaysa sa end."); return; }
+    const rec = { id: schedDraft.id, cat: schedDraft.cat, days: schedDraft.days, start, end };
+    if (until) rec.until = until;
+    schedules = schedDraft.isNew ? schedules.concat([rec]) : schedules.map(x => x.id === rec.id ? rec : x);
+    saveSchedules(); closeSchedule(); renderSchedules();
+    showToast("Goods, saved. Sa next tap mo ito magsisimula.", []);
   });
 
   // ---------- edit tiles ----------
@@ -1340,7 +1467,12 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
     $("login-err").textContent = error || "";
   }
   function goLocal() {
-    mode = "local"; localLoad(); showApp(); render();
+    let hadLocal = false;
+    try { hadLocal = !!localStorage.getItem("oraslog"); } catch (e) {}
+    mode = "local"; localLoad();
+    // Same rule as accounts: existing no-account logs keep the old internship schedule, new ones start empty.
+    try { const o = hadLocal ? JSON.parse(localStorage.getItem("oraslog")) : null; if (o && !o.schedules && Object.keys(o.days || {}).length) schedules = [{ id: uid(), cat: "intern", days: [1, 2, 3, 4, 5], start: "09:00", end: "18:00", until: "2026-11-13" }]; } catch (e) {}
+    showApp(); render();
     setSync("Sa browser na 'to lang naka-save. Mag-login para ma-sync.", true);
     $("acct-who").textContent = "Walang account. Nasa browser na 'to lang ang logs mo.";
     $("signout-btn").textContent = "Bumalik sa login";
@@ -1382,6 +1514,22 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
       if (b && Array.isArray(b.list) && b.list.length) setCats(b.list);
       syncMeta.cats = snap.metadata; showSync();
       render();
+    }, onListenError);
+    let schedulesChecked = false;
+    db.doc(root + "/state/schedules").onSnapshot(live, snap => {
+      const b = snap.exists ? snap.data() : null;
+      schedules = b && Array.isArray(b.list) ? b.list : [];
+      syncMeta.schedules = snap.metadata; showSync();
+      renderSchedules();
+      // First run after schedules arrived: accounts that already have logs keep the old internship rule as a
+      // schedule they can now edit. New accounts start with none.
+      if (!b && !snap.metadata.fromCache && !schedulesChecked) {
+        schedulesChecked = true;
+        db.collection(root + "/days").limit(1).get().then(q => {
+          schedules = q.empty ? [] : [{ id: uid(), cat: "intern", days: [1, 2, 3, 4, 5], start: "09:00", end: "18:00", until: "2026-11-13" }];
+          saveSchedules(); renderSchedules();
+        }).catch(() => { schedulesChecked = false; });
+      }
     }, onListenError);
   }
 
