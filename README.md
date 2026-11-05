@@ -39,3 +39,9 @@ It opens fullscreen like a normal app, and works offline after the first load. I
 <img src="docs/home-screen/step-4-add-to-home-screen.webp" alt="Expanded share sheet with Add to Home Screen highlighted" width="280">
 
 Time Log now sits on your home screen. Open it from there from now on.
+
+## Older versions
+
+Updates reach the main link automatically, including on your home screen. To stay on an older version, open its link and add that to your home screen. It uses the same account and logs.
+
+- [v1.0](https://naarrzz.github.io/time-log/v1.0/)
