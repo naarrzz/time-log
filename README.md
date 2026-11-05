@@ -8,8 +8,8 @@
 A one-tap personal time audit app, built to see where my hours actually go between work, school, coaching, content and training.
 
 - **Ngayon**: tap what you're doing; the timer runs until you tap something else. Forgot to switch? Backdate with 15 / 30 / 60 min chips.
-- **Gaps**: walks you through unlogged stretches (15+ minutes) one at a time.
-- **Week**: last 7 days, totals per category, and a Kasabay summary.
+- **Gaps**: walks you through unlogged stretches (15+ minutes) one at a time, on any day.
+- **Week**: one plain insight, weekly goals, the last 7 days, totals per category, and a Kasabay summary. Tap a day to open it.
 - **Kasabay**: anything running alongside the main activity, with its own start and end. It never adds time, so daily totals stay honest, and Week shows how much of your time was divided and which pairs happen most.
 
 - **Sync and offline**: signed-in logs sync through Cloud Firestore in real time and keep working with no internet.
@@ -45,5 +45,6 @@ Time Log now sits on your home screen. Open it from there from now on.
 
 Updates reach the main link automatically, including on your home screen. To stay on an older version, open its link and add that to your home screen. It uses the same account and logs.
 
+- [v1.2](https://naarrzz.github.io/time-log/v1.2/)
 - [v1.1](https://naarrzz.github.io/time-log/v1.1/)
 - [v1.0](https://naarrzz.github.io/time-log/v1.0/)
