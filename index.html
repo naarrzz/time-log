@@ -61,6 +61,7 @@ header.top h1 { font-family: var(--display); font-size: 32px; font-weight: 700; 
 header.top .date { color: var(--ink-soft); font-size: 13px; font-weight: 600; }
 .sync { font-size: 13px; color: var(--ink-soft); margin: 0; }
 .sync.warn { color: var(--warn); }
+.sync-fix { margin-top: 8px; display: block; font-size: 14px; padding: 8px 14px; }
 
 /* Live card. The bar on the side is like an event in Calendar. */
 .live {
@@ -808,7 +809,7 @@ nav.tabs .badge { position: absolute; top: 1px; left: calc(50% + 6px); min-width
   }
   const wroteBy = {};            // days this version has saved, as far as this device has seen
   try { const k = localStorage.getItem("timelog-wrote"); if (k) wroteBy[k] = true; } catch (e) {}
-  let oldVersionSeen = false;
+  let oldVersionSeen = false, oldVersionDays = [];   // days an older version rewrote, which the fix button marks again
   function saveDay(key) {
     const sessions = mergeAdjacent(days[key] || []);
     const kasabay = mergeAdjacent(kasDays[key] || []);
@@ -2694,7 +2695,16 @@ nav.tabs .badge { position: absolute; top: 1px; left: calc(50% + 6px); min-width
   // Sync status comes from both listeners. Metadata changes are on so it updates when the phone reconnects.
   const syncMeta = {};
   function showSync() {
-    if (oldVersionSeen) { setSync("Binago ng lumang Time Log ang logs mo. Kung may nakabukas pa sa ibang tab o device, isara mo muna.", true); return; }
+    if (oldVersionSeen) {
+      setSync("Binago ng lumang Time Log ang logs mo. Kung may nakabukas pa sa ibang tab o device, isara mo muna.", true);
+      // Each rewritten day keeps the warning until this version saves it again, and older days rarely get saved.
+      // Once the old tabs are closed, this saves them now. If one is still open, the warning comes back.
+      const fix = document.createElement("button");
+      fix.className = "btn sync-fix"; fix.type = "button"; fix.textContent = "Sarado na, ayusin";
+      fix.addEventListener("click", () => { oldVersionDays.forEach(k => { if (days[k]) saveDay(k); }); });
+      $("sync").append(" ", fix);
+      return;
+    }
     const list = Object.values(syncMeta);
     if (list.some(m => m.fromCache)) setSync("Offline. Naka-save sa device, magsi-sync pag may internet.");
     else if (list.some(m => m.hasPendingWrites)) setSync("Nagsi-sync…");
@@ -2710,13 +2720,13 @@ nav.tabs .badge { position: absolute; top: 1px; left: calc(50% + 6px); min-width
     const since = keyOf(Date.now() - 13 * DAY);
     loadedSince = since;
     db.collection(root + "/days").where("date", ">=", since).onSnapshot(live, snap => {
-      oldVersionSeen = false;
+      oldVersionSeen = false; oldVersionDays = [];
       snap.docs.forEach(d => {
         const b = d.data();
         if (b && Array.isArray(b.sessions)) { days[d.id] = b.sessions.slice(); kasDays[d.id] = (b.kasabay || []).slice(); }
         // We saved this day, and now it's missing our mark: something older rewrote it.
         // The next save puts the mark back, so this clears itself unless the old version is still at it.
-        if (b && !b.by && wroteBy[d.id]) oldVersionSeen = true;
+        if (b && !b.by && wroteBy[d.id]) { oldVersionSeen = true; oldVersionDays.push(d.id); }
         if (b && b.by) wroteBy[d.id] = true;
       });
       snap.docChanges().forEach(ch => { if (ch.type === "removed") { delete days[ch.doc.id]; delete kasDays[ch.doc.id]; } });
