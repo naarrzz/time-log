@@ -2666,7 +2666,10 @@ nav.tabs .badge { position: absolute; top: 1px; left: calc(50% + 6px); min-width
     const tab = Object.keys(tabs).find(k => !$(tabs[k]).hidden) || "now";
     const covered = $("tabs").hidden || !$("quiz").hidden || !!document.querySelector(".sheet-wrap.show");
     const badge = $("gap-badge").hidden ? 0 : Number($("gap-badge").textContent) || 0;
-    const text = JSON.stringify({ ui: { tab, show: !covered, badge } });
+    // The Looks choice, so the app's own bar and pop ups match it: Dim counts as dark.
+    const th = document.documentElement.dataset.theme;
+    const scheme = !th ? "auto" : th === "light" ? "light" : "dark";
+    const text = JSON.stringify({ ui: { tab, show: !covered, badge, scheme } });
     if (text !== nativeUiLast) { nativeUiLast = text; nativeBridge.postMessage(text); }
   }
   if (nativeBridge) {
@@ -2802,6 +2805,7 @@ nav.tabs .badge { position: absolute; top: 1px; left: calc(50% + 6px); min-width
     });
     const meta = document.querySelector('meta[name="theme-color"]');
     if (meta) meta.content = getComputedStyle(document.documentElement).getPropertyValue("--bg").trim();
+    if (nativeBridge) nativeUi();   // the theme lives on <html>, which the bar's watcher doesn't see
   }
   let savedTheme = "auto";
   try { savedTheme = localStorage.getItem("timelog-theme") || "auto"; } catch (e) {}
