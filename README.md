@@ -45,6 +45,7 @@ Time Log now sits on your home screen. Open it from there from now on.
 
 Updates reach the main link automatically, including on your home screen. To stay on an older version, open its link and add that to your home screen. It uses the same account and logs.
 
+- [v0.4.0](https://naarrzz.github.io/time-log/v0.4/)
 - [v0.3.0](https://naarrzz.github.io/time-log/v0.3/)
 - [v0.2.2](https://naarrzz.github.io/time-log/v0.2/)
 - [v0.1.0](https://naarrzz.github.io/time-log/v0.1/)
