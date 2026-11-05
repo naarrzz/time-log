@@ -781,6 +781,9 @@ nav.tabs .badge { position: absolute; top: 1px; left: calc(50% + 6px); min-width
     try { const raw = localStorage.getItem("oraslog"); if (raw) { const o = JSON.parse(raw); current = parseCurrent(o.current); Object.assign(days, o.days || {}); Object.assign(kasDays, o.kasabay || {}); if (Array.isArray(o.cats) && o.cats.length) setCats(o.cats); if (Array.isArray(o.schedules)) schedules = o.schedules; if (Array.isArray(o.goals)) goals = o.goals; } } catch (e) {}
     Object.keys(days).forEach(k => { if (normalizeDay(k)) saveDay(k); });
   }
+  const wroteBy = {};            // days this version has saved, as far as this device has seen
+  try { const k = localStorage.getItem("timelog-wrote"); if (k) wroteBy[k] = true; } catch (e) {}
+  let oldVersionSeen = false;
   function saveDay(key) {
     const sessions = mergeAdjacent(days[key] || []);
     const kasabay = mergeAdjacent(kasDays[key] || []);
@@ -789,7 +792,10 @@ nav.tabs .badge { position: absolute; top: 1px; left: calc(50% + 6px); min-width
     if (mode !== "db") { localSave(); return Promise.resolve(); }
     // Firestore applies this to its on-device cache right away and syncs in order once online.
     // Don't chain writes on these promises: they only resolve after the server answers.
-    return db.doc(root + "/days/" + key).set({ date: key, sessions, kasabay }).catch(onWriteError);
+    // "by" marks this version's writes. Older versions save without it, which is how we can tell they touched a day.
+    try { localStorage.setItem("timelog-wrote", key); } catch (e) {}
+    wroteBy[key] = true;
+    return db.doc(root + "/days/" + key).set({ date: key, sessions, kasabay, by: "main" }).catch(onWriteError);
   }
   function saveCurrent() {
     if (mode !== "db") { localSave(); return Promise.resolve(); }
@@ -2594,6 +2600,7 @@ nav.tabs .badge { position: absolute; top: 1px; left: calc(50% + 6px); min-width
   // Sync status comes from both listeners. Metadata changes are on so it updates when the phone reconnects.
   const syncMeta = {};
   function showSync() {
+    if (oldVersionSeen) { setSync("May lumang Time Log na nakabukas sa ibang tab o device, at binago nito ang logs mo. Isara mo muna 'yon.", true); return; }
     const list = Object.values(syncMeta);
     if (list.some(m => m.fromCache)) setSync("Offline. Naka-save sa device, magsi-sync pag may internet.");
     else if (list.some(m => m.hasPendingWrites)) setSync("Nagsi-sync…");
@@ -2612,6 +2619,9 @@ nav.tabs .badge { position: absolute; top: 1px; left: calc(50% + 6px); min-width
       snap.docs.forEach(d => {
         const b = d.data();
         if (b && Array.isArray(b.sessions)) { days[d.id] = b.sessions.slice(); kasDays[d.id] = (b.kasabay || []).slice(); }
+        // We saved this day, and now it's missing our mark: something older rewrote it.
+        if (b && !b.by && wroteBy[d.id]) oldVersionSeen = true;
+        if (b && b.by) wroteBy[d.id] = true;
       });
       snap.docChanges().forEach(ch => { if (ch.type === "removed") { delete days[ch.doc.id]; delete kasDays[ch.doc.id]; } });
       if (!snap.metadata.fromCache) snap.docs.forEach(d => { if (normalizeDay(d.id)) saveDay(d.id); });
