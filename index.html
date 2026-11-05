@@ -111,6 +111,7 @@ header.top .date { color: var(--ink-soft); font-size: 13px; }
 .card h2 { font-family: var(--display); font-size: 17px; margin: 0 0 12px; }
 .bar { display: flex; height: 22px; border-radius: 6px; overflow: hidden; background: var(--line); }
 .bar span { display: block; height: 100%; }
+.bar-fill { display: flex; width: 100%; height: 100%; }
 .axis { display: flex; justify-content: space-between; font-size: 11px; color: var(--ink-soft); margin-top: 6px; font-variant-numeric: tabular-nums; }
 .rows { display: flex; flex-direction: column; margin-top: 12px; }
 .row { display: grid; grid-template-columns: 12px 1fr auto; gap: 10px; align-items: center; padding: 9px 0; border-top: 1px solid var(--line); }
@@ -211,6 +212,8 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
 .goal-top .v { color: var(--ink-soft); font-variant-numeric: tabular-nums; }
 .goal-track { height: 8px; border-radius: 4px; background: var(--line); overflow: hidden; }
 .goal-fill { height: 100%; border-radius: 4px; }
+.goal-pips { display: flex; gap: 3px; }
+.goal-pips .goal-track { flex: 1 1 0; }
 /* Sub-labels */
 .sub-input { font: 16px var(--body); color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 7px 10px; min-width: 0; flex: 1 1 120px; }
 .cat-more { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 8px; padding: 2px 0 8px; }
@@ -234,7 +237,10 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
 @keyframes slide-up { from { transform: translateY(100%); } to { transform: none; } }
 @keyframes toast-in { from { opacity: 0; transform: translate(-50%, 10px); } to { opacity: 1; transform: translate(-50%, 0); } }
 .view { animation: fade-in .16s ease-out; }
-#today-bar, #week-days { animation: reveal .45s ease-out; }
+#today-bar { animation: reveal .45s ease-out; }
+/* Opening Week sweeps the graphs only, the labels are already there. The class comes off right after,
+   because these rows get rebuilt on every render and would replay otherwise. */
+#view-week.sweep .bar-fill, #view-week.sweep .goal-fill { animation: reveal .45s ease-out backwards; }
 .toast.show { animation: toast-in .2s ease-out; }
 .sheet-wrap.show { animation: fade-in .16s ease-out; }
 .sheet-wrap.show .sheet { animation: slide-up .24s cubic-bezier(.2, .8, .3, 1); }
@@ -490,6 +496,18 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
       <button data-per="day" type="button">Per day</button>
       <button data-per="week" type="button">Per week</button>
     </div>
+    <div id="goal-times-wrap">
+      <p class="sub-h" style="margin:0 0 8px">Ilang beses a week?</p>
+      <div class="chips" id="goal-times" role="group" aria-label="Ilang beses a week">
+        <button class="btn tag plain" data-times="7" type="button">Araw-araw</button>
+        <button class="btn tag plain" data-times="6" type="button">6x</button>
+        <button class="btn tag plain" data-times="5" type="button">5x</button>
+        <button class="btn tag plain" data-times="4" type="button">4x</button>
+        <button class="btn tag plain" data-times="3" type="button">3x</button>
+        <button class="btn tag plain" data-times="2" type="button">2x</button>
+        <button class="btn tag plain" data-times="1" type="button">1x</button>
+      </div>
+    </div>
     <div class="time-row"><label>Ilang oras? <input type="number" id="goal-hours" min="0.5" max="168" step="0.5" inputmode="decimal"></label></div>
     <p class="sync warn" id="goal-err" role="alert" style="margin:0" hidden></p>
     <div class="chips">
@@ -560,7 +578,7 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
   const KAS_QUICK = ["scroll", "kain", "intern"];                // shown first; the rest sit behind "Iba pa"
   const TAG_CAT = { kain: "kain", fin: "intern" };               // old whole-log tags -> category
   // Schedules auto-start a Kasabay: a tile, days of the week, a daily time, and an optional last day.
-  let goals = [];                // [{ id, cat, hours, per: "day" | "week", kind?: "limit" }]; older ones without per are weekly
+  let goals = [];                // [{ id, cat, hours, per: "day" | "week", kind?: "limit", times?: 1-6 }]; older ones without per are weekly. times = days a week a per-day goal has to be hit
   let schedules = [];            // [{ id, cat, days: [0-6], start: "09:00", end: "18:00", until?: "2026-11-13" }]
   const atHM = (t, hm) => { const [h, m] = hm.split(":").map(Number); return new Date(t).setHours(h, m, 0, 0); };
   // A schedule's time window on the day of t, or null if it doesn't run that day.
@@ -1347,31 +1365,39 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
   }
   // One plain sentence on top of Week, then progress for each goal.
   const OVER_QUOTES = ["Baka mapano ka niyan.", "Hinay-hinay lang, bes.", "Pahinga rin pag may time.", "Sige ka, ikaw rin."];
+  // A per-day goal you only need to hit some days of the week, like Gym 1.5h, 5x a week.
+  const isTimes = g => g.per === "day" && g.kind !== "limit" && g.times >= 1 && g.times <= 6;
   function drawInsight(all, allMs) {
     const shown = goals.filter(g => CAT[g.cat] && !CAT[g.cat].hidden);
     const card = $("week-insight");
     card.hidden = !allMs && !shown.length;
-    const todayTotals = totals(sessionsFor(keyOf(Date.now()), true));
-    const doneMs = g => g.per === "day" ? (todayTotals[g.cat] || 0) : (all[g.cat] || 0);
+    const now = Date.now();
+    const dayTotals = [0, 1, 2, 3, 4, 5, 6].map(i => totals(sessionsFor(keyOf(now - i * DAY), true)));   // [0] is today
+    const todayTotals = dayTotals[0];
+    const daysHit = g => dayTotals.filter(t => (t[g.cat] || 0) >= g.hours * HOUR).length;
+    // A times goal counts in whole days: each day hit is worth one day's hours, so the checks below work the same.
+    const doneMs = g => isTimes(g) ? daysHit(g) * g.hours * HOUR : g.per === "day" ? (todayTotals[g.cat] || 0) : (all[g.cat] || 0);
+    const targetMs = g => g.hours * HOUR * (isTimes(g) ? g.times : 1);
     // Today's goals come first, since those are the ones you can still act on today.
     const targets = shown.filter(g => g.kind !== "limit"), limits = shown.filter(g => g.kind === "limit");
-    const extraOf = g => doneMs(g) - g.hours * HOUR;
+    const extraOf = g => doneMs(g) - targetMs(g);
     // Way past a goal counts as too much too: 3x the goal and at least 2 hours over.
-    const wayOver = g => doneMs(g) >= g.hours * HOUR * 3 && extraOf(g) >= 2 * HOUR;
+    const wayOver = g => doneMs(g) >= targetMs(g) * 3 && extraOf(g) >= 2 * HOUR;
     const byExtra = (a, b) => extraOf(b) - extraOf(a);
     const brokeLimit = limits.filter(g => extraOf(g) >= MIN).sort(byExtra)[0];
     const tooMuch = targets.filter(wayOver).sort(byExtra)[0];
     // Today's goals come first, since those are the ones you can still act on today.
+    const forToday = g => g.per === "day" && !isTimes(g);
     const short = targets.map(g => ({ g, left: -extraOf(g) })).filter(x => x.left > 0)
-      .sort((a, b) => (a.g.per === "day" ? 0 : 1) - (b.g.per === "day" ? 0 : 1) || b.left - a.left)[0];
+      .sort((a, b) => (forToday(a.g) ? 0 : 1) - (forToday(b.g) ? 0 : 1) || b.left - a.left)[0];
     const over = targets.filter(g => extraOf(g) >= MIN).sort(byExtra)[0];
     const top = Object.entries(all).filter(([id]) => id !== "tulog").sort((a, b) => b[1] - a[1])[0];
     const warn = g => "Over naman sa " + CAT[g.cat].name + ". " + OVER_QUOTES[(g.cat.length + new Date().getDate()) % OVER_QUOTES.length];
     let text = "";
     if (brokeLimit) text = warn(brokeLimit);
     else if (tooMuch) text = warn(tooMuch);
-    else if (short) text = CAT[short.g.cat].name + ": kulang pa ng " + fmtDur(short.left) + (short.g.per === "day" ? " today." : " ngayong 7 days.");
-    else if (over) text = "Pasok lahat ng goals mo. " + (doneMs(over) >= over.hours * HOUR * 1.5 ? "Ganap na ganap ka sa " : "Overachiever ka sa ") + CAT[over.cat].name + "!";
+    else if (short) text = CAT[short.g.cat].name + ": kulang pa ng " + (isTimes(short.g) ? Math.round(short.left / (short.g.hours * HOUR)) + "x" : fmtDur(short.left)) + (forToday(short.g) ? " today." : " ngayong 7 days.");
+    else if (over) text = "Pasok lahat ng goals mo. " + (doneMs(over) >= targetMs(over) * 1.5 ? "Ganap na ganap ka sa " : "Overachiever ka sa ") + CAT[over.cat].name + "!";
     else if (targets.length) text = "Pasok lahat ng goals mo. Ang galing!";
     else if (limits.length) text = "Swak pa sa limits mo. Keep it up!";
     else if (top) text = "Main character mo this week: " + (CAT[top[0]] ? CAT[top[0]].name : top[0]) + ", " + fmtDur(top[1]) + ".";
@@ -1380,6 +1406,7 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
     shown.forEach(g => {
       const ms = doneMs(g), c = CAT[g.cat];
       const row = document.createElement("div"); row.className = "goal-row";
+      if (isTimes(g)) { row.append(...timesRow(g, daysHit(g), todayTotals[g.cat] || 0)); el.appendChild(row); return; }
       const head = document.createElement("div"); head.className = "goal-top";
       const n = document.createElement("span"); n.textContent = c.name;
       const v = document.createElement("span"); v.className = "v"; v.textContent = fmtHrs(ms) + " / " + g.hours + "h " + (g.kind === "limit" ? "max " : "") + (g.per === "day" ? "today" : "· 7 days") + (ms - g.hours * HOUR >= MIN ? " · sobra ng " + fmtDur(ms - g.hours * HOUR) : "");
@@ -1391,6 +1418,26 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
       row.append(head, track);
       el.appendChild(row);
     });
+  }
+  // One piece per time: full for each day hit, and today's progress in the next one.
+  function timesRow(g, hit, todayMs) {
+    const c = CAT[g.cat], dayMs = g.hours * HOUR;
+    const head = document.createElement("div"); head.className = "goal-top";
+    const n = document.createElement("span"); n.textContent = c.name;
+    const v = document.createElement("span"); v.className = "v"; v.textContent = hit + " / " + g.times + "x · today " + fmtHrs(todayMs) + " / " + g.hours + "h";
+    head.append(n, v);
+    const pips = document.createElement("div"); pips.className = "goal-pips";
+    for (let i = 0; i < g.times; i++) {
+      const track = document.createElement("div"); track.className = "goal-track";
+      const fill = document.createElement("div"); fill.className = "goal-fill"; fill.style.background = c.c;
+      fill.style.width = (i < hit ? 100 : i === hit ? Math.min(100, todayMs / dayMs * 100) : 0) + "%";
+      // The sweep crosses the pieces one after another, in the same .45s as a full bar.
+      fill.style.animationDuration = (.45 / g.times) + "s";
+      fill.style.animationDelay = (.45 / g.times * i) + "s";
+      fill.style.animationTimingFunction = "linear";
+      track.appendChild(fill); pips.appendChild(track);
+    }
+    return [head, pips];
   }
   function drawWeekSubs(now) {
     const t = {};
@@ -1424,7 +1471,9 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
       Object.entries(totals(list)).forEach(([k, v]) => { all[k] = (all[k] || 0) + v; allMs += v; });
       const d = document.createElement("div"); d.className = "d"; d.textContent = dayLabel(key).split(",")[0];
       const bar = document.createElement("div"); bar.className = "bar"; bar.style.height = "16px";
-      renderBar(bar, list, midnight(t));
+      // The fill sits in its own layer so only the graph sweeps, not the track behind it.
+      const fill = document.createElement("div"); fill.className = "bar-fill"; bar.appendChild(fill);
+      renderBar(fill, list, midnight(t));
       const h = document.createElement("div"); h.className = "h"; h.textContent = fmtHrs(tracked);
       [d, bar].forEach(el => el.addEventListener("click", () => { viewDay = key; render(); $("tab-now").click(); }));
       wrap.append(d, bar, h);
@@ -1717,7 +1766,7 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
       const head = document.createElement("button"); head.className = "kas-head"; head.type = "button";
       const dot = document.createElement("span"); dot.className = "dot"; dot.style.background = c.c;
       const n = document.createElement("span"); n.className = "n"; n.textContent = c.name;
-      const v = document.createElement("span"); v.className = "v"; v.textContent = (g.kind === "limit" ? "max " : "") + g.hours + "h / " + (g.per === "day" ? "day" : "week");
+      const v = document.createElement("span"); v.className = "v"; v.textContent = (g.kind === "limit" ? "max " : "") + g.hours + "h / " + (g.per === "day" ? "day" : "week") + (isTimes(g) ? " · " + g.times + "x a week" : "");
       head.append(dot, n, v);
       head.addEventListener("click", () => openGoal(g.id));
       row.appendChild(head);
@@ -1738,12 +1787,16 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
   function drawGoalPer() {
     document.querySelectorAll("#goal-per button").forEach(b => b.classList.toggle("on", b.dataset.per === goalDraft.per));
     document.querySelectorAll("#goal-kind button").forEach(b => b.classList.toggle("on", b.dataset.kind === goalDraft.kind));
+    // Only for goals: "max 2h a day, 5x a week" doesn't mean anything for a limit.
+    $("goal-times-wrap").hidden = !(goalDraft.per === "day" && goalDraft.kind === "goal");
+    document.querySelectorAll("#goal-times button").forEach(b => b.setAttribute("aria-pressed", Number(b.dataset.times) === goalDraft.times ? "true" : "false"));
   }
   document.querySelectorAll("#goal-per button").forEach(b => b.addEventListener("click", () => { goalDraft.per = b.dataset.per; drawGoalPer(); }));
   document.querySelectorAll("#goal-kind button").forEach(b => b.addEventListener("click", () => { goalDraft.kind = b.dataset.kind; drawGoalPer(); }));
+  document.querySelectorAll("#goal-times button").forEach(b => b.addEventListener("click", () => { goalDraft.times = Number(b.dataset.times); drawGoalPer(); }));
   function openGoal(id) {
     const g = goals.find(x => x.id === id);
-    goalDraft = g ? { id: g.id, cat: g.cat, per: g.per === "day" ? "day" : "week", kind: g.kind === "limit" ? "limit" : "goal" } : { id: uid(), cat: null, per: "day", kind: "goal", isNew: true };
+    goalDraft = g ? { id: g.id, cat: g.cat, per: g.per === "day" ? "day" : "week", kind: g.kind === "limit" ? "limit" : "goal", times: isTimes(g) ? g.times : 7 } : { id: uid(), cat: null, per: "day", kind: "goal", times: 7, isNew: true };
     drawGoalPer();
     $("goal-hours").value = g ? g.hours : "";
     $("goal-delete").hidden = !g;
@@ -1771,6 +1824,7 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
     if (!(hours > 0) || hours > cap) { fail("Lagyan ng oras, hanggang " + cap + (goalDraft.per === "day" ? " per day." : " per week.")); return; }
     const rec = { id: goalDraft.id, cat: goalDraft.cat, hours, per: goalDraft.per };
     if (goalDraft.kind === "limit") rec.kind = "limit";
+    else if (goalDraft.per === "day" && goalDraft.times < 7) rec.times = goalDraft.times;
     goals = goalDraft.isNew ? goals.concat([rec]) : goals.map(x => x.id === rec.id ? rec : x);
     const savedKind = goalDraft.kind;
     saveGoals(); closeGoal(); render();
@@ -2129,7 +2183,13 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
 
   // ---------- tabs ----------
   const tabs = { now: "view-now", gaps: "view-gaps", week: "view-week", settings: "view-settings" };
+  let sweepTimer = null;
   Object.keys(tabs).forEach(k => $("tab-" + k).addEventListener("click", () => {
+    if (k === "week" && $("view-week").hidden) {
+      $("view-week").classList.add("sweep");
+      clearTimeout(sweepTimer);
+      sweepTimer = setTimeout(() => $("view-week").classList.remove("sweep"), 520);
+    }
     Object.keys(tabs).forEach(j => { $(tabs[j]).hidden = j !== k; $("tab-" + j).classList.toggle("on", j === k); });
     window.scrollTo(0, 0);
   }));
