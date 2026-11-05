@@ -146,6 +146,10 @@ header.top .date { color: var(--ink-soft); font-size: 13px; }
 .sheet-wrap.show { display: flex; }
 .sheet { background: var(--bg); width: min(520px, 100%); border-radius: 22px 22px 0 0; padding: 18px 16px 28px; display: flex; flex-direction: column; gap: 14px; max-height: 90%; overflow: auto; }
 .sheet h3 { font-family: var(--display); margin: 0; font-size: 19px; }
+.sheet-wrap.center { align-items: center; padding: 16px; }
+.sheet-wrap.center .sheet { width: min(340px, 100%); border: 1px solid var(--line); border-radius: 22px; padding: 20px 18px; background: var(--surface); box-shadow: 0 12px 32px rgba(0,0,0,.25); }
+.sheet-wrap.center .sheet p:not(.sync) { margin: 0; line-height: 1.4; color: var(--ink-soft); }
+.sheet-wrap.center .chips { justify-content: flex-end; }
 
 /* Tabs */
 nav.tabs { position: fixed; left: 0; right: 0; bottom: 0; background: var(--surface); border-top: 1px solid var(--line);
@@ -244,6 +248,7 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
 .toast.show { animation: toast-in .2s ease-out; }
 .sheet-wrap.show { animation: fade-in .16s ease-out; }
 .sheet-wrap.show .sheet { animation: slide-up .24s cubic-bezier(.2, .8, .3, 1); }
+.sheet-wrap.center.show .sheet { animation: lift-in .18s ease-out; }
 .kas-edit { animation: lift-in .18s ease-out; }
 .login { animation: fade-in .2s ease-out; }
 [hidden] { display: none !important; }
@@ -417,6 +422,7 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
         <div class="chips">
           <button class="btn" id="export-btn">Backup muna</button>
           <button class="btn" id="signout-btn">Sign out</button>
+          <button class="btn danger" id="reset-btn">Reset logs</button>
         </div>
       </div>
     </div>
@@ -480,6 +486,30 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
       <button class="btn" id="cats-add">+ Add tile</button>
       <button class="btn" id="cats-cancel">Cancel</button>
       <button class="btn primary" id="cats-save">Save</button>
+    </div>
+  </div>
+</div>
+
+<div class="sheet-wrap center" id="reset-wrap">
+  <div class="sheet" role="alertdialog" aria-modal="true" aria-labelledby="reset-title" aria-describedby="reset-text">
+    <h3 id="reset-title">Reset logs?</h3>
+    <p id="reset-text">Mabubura lahat ng logs mo, pati Kasabay at ang tumatakbo ngayon. Maiiwan ang tiles, goals at schedule. Kung gusto mo ng kopya, mag-Backup muna.</p>
+    <div class="chips">
+      <button class="btn" id="reset-no" type="button">Nvm</button>
+      <button class="btn primary" id="reset-next" type="button">Tuloy</button>
+    </div>
+  </div>
+</div>
+
+<!-- The sure button is on the left here, so a double tap on Tuloy can't land on it. -->
+<div class="sheet-wrap center" id="reset2-wrap">
+  <div class="sheet" role="alertdialog" aria-modal="true" aria-labelledby="reset2-title" aria-describedby="reset2-text">
+    <h3 id="reset2-title">Sure na sure?</h3>
+    <p id="reset2-text">Hindi na 'to mababawi. Wala nang undo.</p>
+    <p class="sync warn" id="reset-err" role="alert" style="margin:0" hidden></p>
+    <div class="chips">
+      <button class="btn danger" id="reset-yes" type="button">Oo, burahin lahat</button>
+      <button class="btn" id="reset2-no" type="button">Wag na</button>
     </div>
   </div>
 </div>
@@ -2402,6 +2432,52 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
   }
   $("export-btn").addEventListener("click", () => {
     exportData().catch(() => showToast("Di na-download ang backup. Try ulit?", []));
+  });
+
+  // ---------- reset logs ----------
+  // Only logs go: every day doc and the running log. Tiles, goals and schedule stay.
+  async function resetLogs() {
+    if (mode === "db") {
+      // Needs a fresh list from the server. Older days aren't in the cache, so offline would leave them behind.
+      const meta = Object.values(syncMeta);
+      if (meta.some(m => m.fromCache)) throw { plain: "Kailangan ng internet para mag-reset. Walang nabura." };
+      if (meta.some(m => m.hasPendingWrites)) throw { plain: "May nagsi-sync pa. Try ulit in a bit. Walang nabura." };
+      const snap = await db.collection(root + "/days").get({ source: "server" });
+      for (let i = 0; i < snap.docs.length; i += 500) {   // a batch holds 500 at most
+        const batch = db.batch();
+        snap.docs.slice(i, i + 500).forEach(d => batch.delete(d.ref));
+        batch.commit().catch(onWriteError);   // same as saveDay: applies on the device now, don't wait on the server
+      }
+    }
+    [days, kasDays, dayState].forEach(o => Object.keys(o).forEach(k => { delete o[k]; }));
+    current = null; lastSwitch = null; viewDay = null; gapDay = null; skipped.clear();
+    saveCurrent();
+    // An account with no logs and no saved tiles looks brand new, and would get the quiz on the next open.
+    if (mode === "db") saveCats();
+  }
+  const closeReset = () => { $("reset-wrap").classList.remove("show"); $("reset2-wrap").classList.remove("show"); };
+  $("reset-btn").addEventListener("click", () => { $("reset-wrap").classList.add("show"); });
+  $("reset-next").addEventListener("click", () => {
+    $("reset-wrap").classList.remove("show");
+    $("reset-err").hidden = true;
+    $("reset2-wrap").classList.add("show");
+  });
+  $("reset-no").addEventListener("click", closeReset);
+  $("reset2-no").addEventListener("click", closeReset);
+  $("reset-wrap").addEventListener("click", e => { if (e.target.id === "reset-wrap") closeReset(); });
+  $("reset2-wrap").addEventListener("click", e => { if (e.target.id === "reset2-wrap" && !$("reset-yes").disabled) closeReset(); });
+  $("reset-yes").addEventListener("click", async () => {
+    const yes = $("reset-yes"), no = $("reset2-no");
+    yes.disabled = no.disabled = true; yes.textContent = "Sandali…";
+    try {
+      await resetLogs();
+      closeReset(); render();
+      showToast("Okay, malinis na. Fresh start!", []);
+    } catch (e) {
+      $("reset-err").textContent = e && e.plain ? e.plain : "Di na-reset. Kailangan ng internet. Walang nabura.";
+      $("reset-err").hidden = false;
+    }
+    yes.disabled = no.disabled = false; yes.textContent = "Oo, burahin lahat";
   });
 
   // ---------- start ----------
