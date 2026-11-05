@@ -205,6 +205,12 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
 .extras .btn { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-soft); }
 .extras .btn.set { color: var(--ink); border-color: var(--ink-soft); }
 .extras .btn[aria-expanded="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.insight { font-family: var(--display); font-size: 18px; font-weight: 600; line-height: 1.3; margin: 0; }
+.goal-row { margin-top: 12px; }
+.goal-top { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; font-weight: 600; margin-bottom: 5px; }
+.goal-top .v { color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.goal-track { height: 8px; border-radius: 4px; background: var(--line); overflow: hidden; }
+.goal-fill { height: 100%; border-radius: 4px; }
 /* Sub-labels */
 .sub-input { font: 16px var(--body); color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 7px 10px; min-width: 0; flex: 1 1 120px; }
 .cat-more { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 8px; padding: 2px 0 8px; }
@@ -355,6 +361,10 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
   <!-- LINGGO -->
   <section id="view-week" class="view" hidden>
     <div style="display:flex;flex-direction:column;gap:18px">
+      <div class="card" id="week-insight" hidden>
+        <p class="insight" id="insight-text"></p>
+        <div id="insight-goals"></div>
+      </div>
       <div class="card">
         <h2>Last 7 days</h2>
         <div class="week" id="week-days"></div>
@@ -374,6 +384,12 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
   <!-- SETTINGS -->
   <section id="view-settings" class="view" hidden>
     <div style="display:flex;flex-direction:column;gap:18px">
+      <div class="card">
+        <h2>Goals</h2>
+        <p class="empty" style="margin-bottom:10px">Ilang oras per week ang gusto mong ilaan? Makikita mo ang progress sa Week.</p>
+        <div class="rows" id="goal-list" style="margin-top:0"></div>
+        <div class="chips" style="margin-top:10px"><button class="btn" id="goal-add">+ Add goal</button></div>
+      </div>
       <div class="card">
         <h2>Schedule</h2>
         <p class="empty" style="margin-bottom:10px">May work o klase na fixed ang oras? Kusa itong magka-Kasabay sa mga oras na 'yon.</p>
@@ -399,7 +415,7 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
       </div>
     </div>
   </section>
-  <p class="credit">v1.2 · by Narz Angelo Alcaide</p>
+  <p class="credit">v1.3 · by Narz Angelo Alcaide</p>
 </div>
 
 <div class="toast" id="toast" role="status" aria-live="polite">
@@ -458,6 +474,20 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
       <button class="btn" id="cats-add">+ Add tile</button>
       <button class="btn" id="cats-cancel">Cancel</button>
       <button class="btn primary" id="cats-save">Save</button>
+    </div>
+  </div>
+</div>
+
+<div class="sheet-wrap" id="goal-wrap">
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="goal-title">
+    <h3 id="goal-title">Goal</h3>
+    <div><p class="sub-h" style="margin:0 0 8px">Anong tile?</p><div class="chips" id="goal-cats"></div></div>
+    <div class="time-row"><label>Oras per week <input type="number" id="goal-hours" min="0.5" max="168" step="0.5" inputmode="decimal"></label></div>
+    <p class="sync warn" id="goal-err" role="alert" style="margin:0" hidden></p>
+    <div class="chips">
+      <button class="btn danger" id="goal-delete">Delete</button>
+      <button class="btn" id="goal-cancel">Nvm</button>
+      <button class="btn primary" id="goal-save">Save</button>
     </div>
   </div>
 </div>
@@ -522,6 +552,7 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
   const KAS_QUICK = ["scroll", "kain", "intern"];                // shown first; the rest sit behind "Iba pa"
   const TAG_CAT = { kain: "kain", fin: "intern" };               // old whole-log tags -> category
   // Schedules auto-start a Kasabay: a tile, days of the week, a daily time, and an optional last day.
+  let goals = [];                // [{ id, cat, hours }] hours per 7 days
   let schedules = [];            // [{ id, cat, days: [0-6], start: "09:00", end: "18:00", until?: "2026-11-13" }]
   const atHM = (t, hm) => { const [h, m] = hm.split(":").map(Number); return new Date(t).setHours(h, m, 0, 0); };
   // A schedule's time window on the day of t, or null if it doesn't run that day.
@@ -581,7 +612,7 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
   };
   let auth = null, db = null, root = "", mode = "loading", quizChecked = false;
   function localSave() {
-    try { localStorage.setItem("oraslog", JSON.stringify({ current, days, kasabay: kasDays, cats: CATS, schedules })); } catch (e) {}
+    try { localStorage.setItem("oraslog", JSON.stringify({ current, days, kasabay: kasDays, cats: CATS, schedules, goals })); } catch (e) {}
   }
   function parseCurrent(b) {
     if (!b || b.active === false || !b.cat) return null;
@@ -590,7 +621,7 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
     return { cat: b.cat, start: b.start, kas, sub: b.sub || undefined };
   }
   function localLoad() {
-    try { const raw = localStorage.getItem("oraslog"); if (raw) { const o = JSON.parse(raw); current = parseCurrent(o.current); Object.assign(days, o.days || {}); Object.assign(kasDays, o.kasabay || {}); if (Array.isArray(o.cats) && o.cats.length) setCats(o.cats); if (Array.isArray(o.schedules)) schedules = o.schedules; } } catch (e) {}
+    try { const raw = localStorage.getItem("oraslog"); if (raw) { const o = JSON.parse(raw); current = parseCurrent(o.current); Object.assign(days, o.days || {}); Object.assign(kasDays, o.kasabay || {}); if (Array.isArray(o.cats) && o.cats.length) setCats(o.cats); if (Array.isArray(o.schedules)) schedules = o.schedules; if (Array.isArray(o.goals)) goals = o.goals; } } catch (e) {}
     Object.keys(days).forEach(k => { if (normalizeDay(k)) saveDay(k); });
   }
   function saveDay(key) {
@@ -609,6 +640,10 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
     return db.doc(root + "/state/current").set(body).catch(onWriteError);
   }
   // Separate from the day docs, so an older version writing a day can never wipe it.
+  function saveGoals() {
+    if (mode !== "db") { localSave(); return; }
+    db.doc(root + "/state/goals").set({ list: goals }).catch(onWriteError);
+  }
   function saveSchedules() {
     if (mode !== "db") { localSave(); return; }
     db.doc(root + "/state/schedules").set({ list: schedules }).catch(onWriteError);
@@ -1270,6 +1305,7 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
     renderGaps();
     renderWeek();
     renderSchedules();
+    renderGoals();
   }
   function renderGaps() {
     const now = Date.now();
@@ -1300,6 +1336,34 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
       render(); showToast(fmtDur(g.end - g.start) + " na " + c.name + ". Sakto, noted!", []);
     }, false)));
     $("gap-skip").onclick = () => { skipped.add(key + ":" + g.start); renderGaps(); };
+  }
+  // One plain sentence on top of Week, then progress for each goal.
+  function drawInsight(all, allMs) {
+    const shown = goals.filter(g => CAT[g.cat] && !CAT[g.cat].hidden);
+    const card = $("week-insight");
+    card.hidden = !allMs && !shown.length;
+    const short = shown.map(g => ({ g, left: g.hours * HOUR - (all[g.cat] || 0) })).filter(x => x.left > 0).sort((a, b) => b.left - a.left)[0];
+    const top = Object.entries(all).filter(([id]) => id !== "tulog").sort((a, b) => b[1] - a[1])[0];
+    let text = "";
+    if (short) text = CAT[short.g.cat].name + ": kulang pa ng " + fmtDur(short.left) + " para sa goal mo.";
+    else if (shown.length) text = "Pasok lahat ng goals mo. Ang galing!";
+    else if (top) text = "Pinakamalaki ngayong 7 days: " + (CAT[top[0]] ? CAT[top[0]].name : top[0]) + ", " + fmtDur(top[1]) + ".";
+    $("insight-text").textContent = text;
+    const el = $("insight-goals"); el.innerHTML = "";
+    shown.forEach(g => {
+      const ms = all[g.cat] || 0, c = CAT[g.cat];
+      const row = document.createElement("div"); row.className = "goal-row";
+      const head = document.createElement("div"); head.className = "goal-top";
+      const n = document.createElement("span"); n.textContent = c.name;
+      const v = document.createElement("span"); v.className = "v"; v.textContent = fmtHrs(ms) + " / " + g.hours + "h";
+      head.append(n, v);
+      const track = document.createElement("div"); track.className = "goal-track";
+      const fill = document.createElement("div"); fill.className = "goal-fill";
+      fill.style.width = Math.min(100, ms / (g.hours * HOUR) * 100) + "%"; fill.style.background = c.c;
+      track.appendChild(fill);
+      row.append(head, track);
+      el.appendChild(row);
+    });
   }
   function drawWeekSubs(now) {
     const t = {};
@@ -1339,6 +1403,7 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
       wrap.append(d, bar, h);
     }
     totalsRows($("week-totals"), all, allMs);
+    drawInsight(all, allMs);
     drawWeekSubs(now);
 
     // Kasabay summary
@@ -1613,6 +1678,65 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
     touched.forEach(k => saveDay(k));
     closeSheet(); render();
     showToast("Goods, naayos na.", []);
+  });
+
+  // ---------- goals ----------
+  function renderGoals() {
+    const el = $("goal-list"); el.innerHTML = "";
+    if (!goals.length) { const p = document.createElement("p"); p.className = "empty"; p.textContent = "Wala pa."; el.appendChild(p); return; }
+    goals.forEach(g => {
+      const c = CAT[g.cat] || { name: g.cat, c: "#999" };
+      const row = document.createElement("div"); row.className = "kas-row";
+      const head = document.createElement("button"); head.className = "kas-head"; head.type = "button";
+      const dot = document.createElement("span"); dot.className = "dot"; dot.style.background = c.c;
+      const n = document.createElement("span"); n.className = "n"; n.textContent = c.name;
+      const v = document.createElement("span"); v.className = "v"; v.textContent = g.hours + "h / week";
+      head.append(dot, n, v);
+      head.addEventListener("click", () => openGoal(g.id));
+      row.appendChild(head);
+      el.appendChild(row);
+    });
+  }
+  let goalDraft = null;
+  function drawGoalCats() {
+    const el = $("goal-cats"); el.innerHTML = "";
+    shownCats().forEach(c => {
+      const b = document.createElement("button");
+      b.className = "btn tag plain"; b.textContent = c.name;
+      b.setAttribute("aria-pressed", goalDraft.cat === c.id ? "true" : "false");
+      b.addEventListener("click", () => { goalDraft.cat = c.id; drawGoalCats(); });
+      el.appendChild(b);
+    });
+  }
+  function openGoal(id) {
+    const g = goals.find(x => x.id === id);
+    goalDraft = g ? { id: g.id, cat: g.cat } : { id: uid(), cat: null, isNew: true };
+    $("goal-hours").value = g ? g.hours : "";
+    $("goal-delete").hidden = !g;
+    $("goal-err").hidden = true;
+    drawGoalCats();
+    $("goal-wrap").classList.add("show");
+  }
+  const closeGoal = () => { $("goal-wrap").classList.remove("show"); goalDraft = null; };
+  $("goal-add").addEventListener("click", () => openGoal(null));
+  $("goal-cancel").addEventListener("click", closeGoal);
+  $("goal-wrap").addEventListener("click", e => { if (e.target.id === "goal-wrap") closeGoal(); });
+  $("goal-delete").addEventListener("click", () => {
+    const before = goals;
+    goals = goals.filter(x => x.id !== goalDraft.id);
+    saveGoals(); closeGoal(); render();
+    showUndo("Okay, tanggal na ang goal.", () => { goals = before; saveGoals(); });
+  });
+  $("goal-save").addEventListener("click", () => {
+    const fail = text => { $("goal-err").textContent = text; $("goal-err").hidden = false; };
+    const hours = parseFloat($("goal-hours").value);
+    if (!goalDraft.cat) { fail("Pili muna ng tile."); return; }
+    if (goals.some(x => x.cat === goalDraft.cat && x.id !== goalDraft.id)) { fail("May goal na ang tile na 'yan."); return; }
+    if (!(hours > 0) || hours > 168) { fail("Lagyan ng oras, hanggang 168 per week."); return; }
+    const rec = { id: goalDraft.id, cat: goalDraft.cat, hours };
+    goals = goalDraft.isNew ? goals.concat([rec]) : goals.map(x => x.id === rec.id ? rec : x);
+    saveGoals(); closeGoal(); render();
+    showToast("Goods, set na ang goal.", []);
   });
 
   // ---------- schedules ----------
@@ -2050,6 +2174,12 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
         db.collection(root + "/days").limit(1).get({ source: "server" }).then(q => { if (q.empty && !current) openQuiz(); }).catch(() => { quizChecked = false; });
       }
       syncMeta.cats = snap.metadata; showSync();
+      render();
+    }, onListenError);
+    db.doc(root + "/state/goals").onSnapshot(live, snap => {
+      const b = snap.exists ? snap.data() : null;
+      goals = b && Array.isArray(b.list) ? b.list : [];
+      syncMeta.goals = snap.metadata; showSync();
       render();
     }, onListenError);
     let schedulesChecked = false;
