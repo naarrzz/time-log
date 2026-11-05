@@ -1366,12 +1366,12 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
       .sort((a, b) => (a.g.per === "day" ? 0 : 1) - (b.g.per === "day" ? 0 : 1) || b.left - a.left)[0];
     const over = targets.filter(g => extraOf(g) >= MIN).sort(byExtra)[0];
     const top = Object.entries(all).filter(([id]) => id !== "tulog").sort((a, b) => b[1] - a[1])[0];
-    const warn = g => "Over naman sa " + CAT[g.cat].name + ": sobra ng " + fmtDur(extraOf(g)) + ". " + OVER_QUOTES[(g.cat.length + new Date().getDate()) % OVER_QUOTES.length];
+    const warn = g => "Over naman sa " + CAT[g.cat].name + ". " + OVER_QUOTES[(g.cat.length + new Date().getDate()) % OVER_QUOTES.length];
     let text = "";
     if (brokeLimit) text = warn(brokeLimit);
     else if (tooMuch) text = warn(tooMuch);
     else if (short) text = CAT[short.g.cat].name + ": kulang pa ng " + fmtDur(short.left) + (short.g.per === "day" ? " today." : " ngayong 7 days.");
-    else if (over) text = "Pasok lahat ng goals mo. " + (doneMs(over) >= over.hours * HOUR * 1.5 ? "Ganap na ganap ka sa " : "Overachiever ka sa ") + CAT[over.cat].name + ": sobra ng " + fmtDur(extraOf(over)) + "!";
+    else if (over) text = "Pasok lahat ng goals mo. " + (doneMs(over) >= over.hours * HOUR * 1.5 ? "Ganap na ganap ka sa " : "Overachiever ka sa ") + CAT[over.cat].name + "!";
     else if (targets.length) text = "Pasok lahat ng goals mo. Ang galing!";
     else if (limits.length) text = "Swak pa sa limits mo. Keep it up!";
     else if (top) text = "Main character mo this week: " + (CAT[top[0]] ? CAT[top[0]].name : top[0]) + ", " + fmtDur(top[1]) + ".";
