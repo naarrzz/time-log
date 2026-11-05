@@ -13,6 +13,7 @@ A one-tap personal time audit app, built to see where my hours actually go betwe
 - **Kasabay**: anything running alongside the main activity, with its own start and end. It never adds time, so daily totals stay honest, and Week shows how much of your time was divided and which pairs happen most.
 
 - **Sync and offline**: signed-in logs sync through Cloud Firestore in real time and keep working with no internet.
+- **Sub-labels**: say what exactly you did in a tile, like Jeep under Biyahe. Optional, and Week shows the breakdown.
 - **Backup**: download every log as a JSON file.
 - **Themes**: Auto, Light, Dim and Dark, saved per device.
 
@@ -44,4 +45,5 @@ Time Log now sits on your home screen. Open it from there from now on.
 
 Updates reach the main link automatically, including on your home screen. To stay on an older version, open its link and add that to your home screen. It uses the same account and logs.
 
+- [v1.1](https://naarrzz.github.io/time-log/v1.1/)
 - [v1.0](https://naarrzz.github.io/time-log/v1.0/)
