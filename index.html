@@ -162,17 +162,17 @@ header.top .date { color: var(--ink-soft); font-size: 13px; font-weight: 600; }
 .sheet { background: var(--bg); width: min(520px, 100%); border-radius: 14px 14px 0 0; padding: 18px 16px calc(24px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 14px; max-height: 90%; overflow: auto; }
 .sheet h3 { font-family: var(--display); margin: 0; font-size: 20px; font-weight: 700; letter-spacing: -0.01em; }
 .sheet-wrap.center { align-items: center; padding: 16px; }
-/* Centered pop ups, like an iOS alert: centered text, and full-width buttons split by hairlines. */
-.sheet-wrap.center .sheet { width: min(300px, 100%); border-radius: 14px; padding: 0; gap: 0; background: var(--surface); box-shadow: 0 12px 32px rgba(0,0,0,.25); text-align: center; }
-.sheet-wrap.center .sheet h3 { font-size: 17px; font-weight: 600; letter-spacing: 0; padding: 18px 16px 4px; }
-.sheet-wrap.center .sheet p { margin: 0; padding: 0 16px 16px; font-size: 14px; line-height: 1.35; color: var(--ink); }
+/* Centered pop ups, like iOS 26 alerts: very round, left-aligned text, and capsule buttons side by side.
+   .stack puts them on top of each other, as iOS does for a delete. */
+.sheet-wrap.center .sheet { width: min(320px, 100%); border-radius: 34px; padding: 22px 16px 16px; gap: 0; background: var(--surface); box-shadow: 0 12px 32px rgba(0,0,0,.25); }
+.sheet-wrap.center .sheet h3 { font-size: 17px; font-weight: 600; letter-spacing: 0; padding: 0 14px 6px; }
+.sheet-wrap.center .sheet p { margin: 0; padding: 0 14px 16px; font-size: 15px; line-height: 1.35; color: var(--ink-soft); }
 .sheet-wrap.center .sheet p.sync { color: var(--warn); }
-.sheet-wrap.center .chips { flex-wrap: nowrap; gap: 0; border-top: .5px solid var(--line); }
-.sheet-wrap.center .btn { flex: 1 1 0; min-width: 0; min-height: 44px; border-radius: 0; background: transparent; padding: 10px 6px; font-size: 16px; font-weight: 400; color: var(--accent); }
-.sheet-wrap.center .btn + .btn { border-left: .5px solid var(--line); }
-.sheet-wrap.center .btn.primary { font-weight: 600; color: var(--accent); }
+.sheet-wrap.center .chips { flex-wrap: nowrap; gap: 8px; }
+.sheet-wrap.center .chips.stack { flex-direction: column; }
+.sheet-wrap.center .btn { flex: 1 1 0; min-width: 0; min-height: 48px; background: var(--fill); padding: 10px 8px; font-size: 16px; font-weight: 500; color: var(--ink); }
+.sheet-wrap.center .chips.stack .btn { flex: none; width: 100%; }
 .sheet-wrap.center .btn.danger { color: var(--warn); }
-.sheet-wrap.center .btn:active { transform: none; background: var(--fill); }
 .sheet-wrap.center .btn:disabled { opacity: .5; }
 
 /* Tabs: a capsule floating over the content. The glass itself is in the Glass block below. */
@@ -346,7 +346,7 @@ nav.tabs .badge { position: absolute; top: 1px; left: calc(50% + 6px); min-width
   </form>
   <hr>
   <button class="btn" id="guest-btn" type="button">Try muna, no account</button>
-  <p class="sync" style="margin:0">Heads up: sa browser na 'to lang mase-save logs mo.</p>
+  <p class="sync" style="margin:0">Heads up: sa browser lang na 'to mase-save ang logs mo.</p>
   <p class="credit">by Narz Angelo Alcaide</p>
 </main>
 
@@ -391,7 +391,7 @@ nav.tabs .badge { position: absolute; top: 1px; left: calc(50% + 6px); min-width
         <div class="rows" id="today-totals"></div>
       </div>
       <div class="card">
-        <h2 id="today-logs-title">Mga log today</h2>
+        <div class="ask-row"><h2 id="today-logs-title" style="margin:0">Mga log today</h2><button class="btn" id="log-add">+ Add</button></div>
         <div class="rows" id="today-list"></div>
       </div>
     </div>
@@ -513,8 +513,37 @@ nav.tabs .badge { position: absolute; top: 1px; left: calc(50% + 6px); min-width
       <div class="tagrow" id="sheet-tags" style="margin-top:10px" hidden></div>
     </div>
     <div class="chips">
+      <button class="btn" id="sheet-live-start" hidden>Palitan ang start</button>
       <button class="btn danger" id="sheet-delete">Delete log</button>
       <button class="btn primary" id="sheet-close">Done</button>
+    </div>
+  </div>
+</div>
+
+<div class="sheet-wrap center" id="reset3-wrap">
+  <div class="sheet" role="alertdialog" aria-modal="true" aria-labelledby="reset3-title" aria-describedby="reset3-text">
+    <h3 id="reset3-title">Malinis na!</h3>
+    <p id="reset3-text">Gusto mo bang mag-setup ulit ng tiles mula sa simula? Pwede ring ituloy na lang ang tiles mo ngayon.</p>
+    <div class="chips">
+      <button class="btn" id="reset3-no" type="button">Ituloy na</button>
+      <button class="btn primary" id="reset3-yes" type="button">Setup ulit</button>
+    </div>
+  </div>
+</div>
+
+<div class="sheet-wrap" id="add-log-wrap">
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="add-log-title">
+    <h3 id="add-log-title">Add log</h3>
+    <div class="time-row">
+      <label>Start <input type="time" id="add-log-start"></label>
+      <label>End <input type="time" id="add-log-end"></label>
+    </div>
+    <div class="tiles" id="add-log-tiles"></div>
+    <div class="tagrow" id="add-log-subs" hidden></div>
+    <p class="sync warn" id="add-log-err" role="alert" style="margin:0" hidden></p>
+    <div class="chips">
+      <button class="btn" id="add-log-cancel">Nvm</button>
+      <button class="btn primary" id="add-log-save">Add</button>
     </div>
   </div>
 </div>
@@ -572,13 +601,13 @@ nav.tabs .badge { position: absolute; top: 1px; left: calc(50% + 6px); min-width
   </div>
 </div>
 
-<!-- The sure button is on the left here, so a double tap on Tuloy can't land on it. -->
+<!-- The sure button is on top here, so a double tap on Tuloy lands on Wag na. -->
 <div class="sheet-wrap center" id="reset2-wrap">
   <div class="sheet" role="alertdialog" aria-modal="true" aria-labelledby="reset2-title" aria-describedby="reset2-text">
     <h3 id="reset2-title">Sure na sure?</h3>
     <p id="reset2-text">Hindi na 'to mababawi. Wala nang undo.</p>
     <p class="sync warn" id="reset-err" role="alert" style="margin:0" hidden></p>
-    <div class="chips">
+    <div class="chips stack">
       <button class="btn danger" id="reset-yes" type="button">Oo, burahin lahat</button>
       <button class="btn" id="reset2-no" type="button">Wag na</button>
     </div>
@@ -1096,7 +1125,9 @@ nav.tabs .badge { position: absolute; top: 1px; left: calc(50% + 6px); min-width
     if (!current) return;
     const newStart = toastTap - mins * MIN;
     const now = Date.now();
+    const before = snapshotLogs(Math.min(newStart, current.start), now);
     const touched = carve(newStart, now);
+    const replaced = touched.size > 0;
     if (newStart < current.start) carveKas(newStart, current.start).forEach(k => touched.add(k));   // those logs are gone, so their Kasabay go too
     touched.forEach(k => saveDay(k));
     const moved = newStart < current.start;
@@ -1109,7 +1140,8 @@ nav.tabs .badge { position: absolute; top: 1px; left: calc(50% + 6px); min-width
       k.start = Math.max(k.start, newStart);    // a Kasabay can't start before the main activity
     });
     saveCurrent(); render();
-    showToast("Noted, " + CAT[current.cat].name + " since " + fmtTime(newStart) + ".", []);
+    const note = "Noted, " + CAT[current.cat].name + " since " + fmtTime(newStart) + ".";
+    if (replaced) showUndo(note, () => restoreLogs(before)); else showToast(note, []);
   }
   // cats: which chips to show. labelOf: optional chip text. extra: optional trailing chip { text, onClick }.
   function kasButtons(el, cats, isOn, onToggle, labelOf, extra) {
@@ -1140,6 +1172,7 @@ nav.tabs .badge { position: absolute; top: 1px; left: calc(50% + 6px); min-width
     $("toast-text").textContent = "Since when?";
     $("toast").classList.add("show");
     const chips = $("toast-chips"); chips.innerHTML = "";
+    chips.hidden = false;       // a text-only toast just before this one leaves them hidden
     const input = document.createElement("input");
     input.type = "time"; input.className = "toast-time"; input.setAttribute("aria-label", "Oras ng simula");
     const t0 = new Date(shown); input.value = pad(t0.getHours()) + ":" + pad(t0.getMinutes());
@@ -1186,6 +1219,20 @@ nav.tabs .badge { position: absolute; top: 1px; left: calc(50% + 6px); min-width
     toastTimer = setTimeout(hideToast, mins.length ? 4000 : 2500);
   }
 
+  // Copies of the logs on the days from start to end, and the running log, to put back if an edit went wrong.
+  function snapshotLogs(start, end) {
+    const snap = { current: current ? JSON.parse(JSON.stringify(current)) : null, days: {} };
+    for (let d = midnight(start); d < end; d = nextMidnight(d)) {
+      const key = keyOf(d);
+      snap.days[key] = JSON.parse(JSON.stringify({ sessions: days[key] || [], kas: kasDays[key] || [] }));
+    }
+    return snap;
+  }
+  function restoreLogs(snap) {
+    Object.keys(snap.days).forEach(key => { days[key] = snap.days[key].sessions; kasDays[key] = snap.days[key].kas; saveDay(key); });
+    current = snap.current;
+    saveCurrent();
+  }
   // A delete can be taken back for a few seconds.
   function showUndo(text, undo) {
     showToast(text, []);
@@ -1739,8 +1786,11 @@ nav.tabs .badge { position: absolute; top: 1px; left: calc(50% + 6px); min-width
     const st = $("sheet-tiles"); st.innerHTML = "";
     shownCats().forEach(c => st.appendChild(tileButton(c, () => {
       const s = find();
-      if (s) { carveKas(s.start, s.end, c.id); s.cat = c.id; delete s.sub; saveDay(key); }   // a log can't be Kasabay of itself
+      if (!s || s.cat === c.id) { closeSheet(); return; }   // its own tile: nothing to change, and the label stays
+      const before = snapshotLogs(s.start, s.end);
+      carveKas(s.start, s.end, c.id); s.cat = c.id; delete s.sub; saveDay(key);   // a log can't be Kasabay of itself
       closeSheet(); render();
+      showUndo("Okay, " + c.name + " na 'to.", () => restoreLogs(before));
     }, x.cat === c.id)));
     drawSheetSubs();
     drawSheetKas();
@@ -1759,11 +1809,12 @@ nav.tabs .badge { position: absolute; top: 1px; left: calc(50% + 6px); min-width
       b.setAttribute("aria-pressed", s.sub === name ? "true" : "false");
       b.addEventListener("click", () => {
         const cur = sheetRange(); if (!cur) { closeSheet(); return; }
+        const before = snapshotLogs(cur.start, cur.end);
         if (cur.sub === name) delete cur.sub; else cur.sub = name;
         saveDay(editing.key);
         // Saving can merge it into the log next to it, so the sheet may need to close.
-        if (sheetRange()) drawSheetSubs(); else closeSheet();
-        render();
+        if (sheetRange()) { drawSheetSubs(); render(); }
+        else { closeSheet(); render(); showUndo("Pinagsama ko sa katabing log.", () => restoreLogs(before)); }
       });
       el.appendChild(b);
     });
@@ -1773,6 +1824,7 @@ nav.tabs .badge { position: absolute; top: 1px; left: calc(50% + 6px); min-width
   function resetSheet(live) {
     kasOpen = null; kasAdding = false;
     $("sheet-times").hidden = live;
+    $("sheet-live-start").hidden = !live;
     $("sheet-tiles").hidden = live;
     $("sheet-delete").hidden = live;
     $("sheet-subs").hidden = true;
@@ -1782,7 +1834,7 @@ nav.tabs .badge { position: absolute; top: 1px; left: calc(50% + 6px); min-width
     if (!current) return;
     editing = { key: keyOf(Date.now()), id: "live" };
     resetSheet(true);
-    $("sheet-sub").textContent = CAT[current.cat].name + ", running pa. Kasabay muna ang ayusin natin.";
+    $("sheet-sub").textContent = CAT[current.cat].name + ", running pa.";
     drawSheetKas();
     $("sheet-wrap").classList.add("show");
   }
@@ -1915,6 +1967,7 @@ nav.tabs .badge { position: absolute; top: 1px; left: calc(50% + 6px); min-width
     const others = (days[key] || []).filter(v => v.id !== id);
     const logged = others.reduce((a, v) => a + overlapMs(v, { start: ns, end: ne }), 0);
     if (logged >= MIN && !confirm("Mapapalitan nito ang " + fmtDur(logged) + " na naka-log na. Sure ka?")) return;
+    const before = snapshotLogs(Math.min(s.start, ns), Math.max(s.end, ne));
     days[key] = others;
     const touched = carve(ns, ne);
     touched.add(key);
@@ -1925,7 +1978,64 @@ nav.tabs .badge { position: absolute; top: 1px; left: calc(50% + 6px); min-width
     });
     touched.forEach(k => saveDay(k));
     closeSheet(); render();
-    showToast("Goods, naayos na.", []);
+    showUndo("Goods, naayos na.", () => restoreLogs(before));
+  });
+
+  // ---------- add a log by hand ----------
+  // For anything missed or lost. Like every new log, it wins over what it overlaps, after asking first.
+  let addLog = null;
+  function drawAddLog() {
+    const tilesEl = $("add-log-tiles"); tilesEl.innerHTML = "";
+    shownCats().forEach(c => tilesEl.appendChild(tileButton(c, () => {
+      if (addLog.cat !== c.id) { addLog.cat = c.id; addLog.sub = null; }
+      drawAddLog();
+    }, addLog.cat === c.id)));
+    const el = $("add-log-subs"), subs = addLog.cat ? subsOf(CAT[addLog.cat]) : [];
+    el.hidden = !subs.length; el.innerHTML = "";
+    if (!subs.length) return;
+    const lbl = document.createElement("span"); lbl.className = "lbl"; lbl.textContent = "Specifically:";
+    el.appendChild(lbl);
+    subs.forEach(name => {
+      const b = document.createElement("button");
+      b.className = "btn tag plain"; b.textContent = name;
+      b.setAttribute("aria-pressed", addLog.sub === name ? "true" : "false");
+      b.addEventListener("click", () => { addLog.sub = addLog.sub === name ? null : name; drawAddLog(); });
+      el.appendChild(b);
+    });
+  }
+  $("log-add").addEventListener("click", () => {
+    const now = Date.now(), today = keyOf(now), key = viewDay && viewDay < today ? viewDay : today;
+    if (!dayReady(key)) return;
+    const list = sessionsFor(key, false), d0 = midnight(new Date(key.replace(/-/g, "/")).getTime());
+    // Starts where the last log ended, since that's usually where the missing part is.
+    const start = list.length ? list[list.length - 1].end : Math.max(d0, Math.min(now, d0 + DAY) - 30 * MIN);
+    const limit = current && key === today ? Math.min(now, current.start) : Math.min(now, d0 + DAY - MIN);
+    addLog = { key, cat: null, sub: null };
+    $("add-log-start").value = toHM(Math.min(start, limit));
+    $("add-log-end").value = toHM(limit);
+    $("add-log-err").hidden = true;
+    drawAddLog();
+    $("add-log-wrap").classList.add("show");
+  });
+  const closeAddLog = () => { $("add-log-wrap").classList.remove("show"); addLog = null; };
+  $("add-log-cancel").addEventListener("click", closeAddLog);
+  $("add-log-wrap").addEventListener("click", e => { if (e.target.id === "add-log-wrap") closeAddLog(); });
+  $("add-log-save").addEventListener("click", () => {
+    const fail = text => { $("add-log-err").textContent = text; $("add-log-err").hidden = false; };
+    if (!addLog.cat) { fail("Pili muna ng tile."); return; }
+    if (!$("add-log-start").value || !$("add-log-end").value) { fail("Lagyan muna ng oras pareho."); return; }
+    const d0 = midnight(new Date(addLog.key.replace(/-/g, "/")).getTime());
+    const at = hm => { const [h, m] = hm.split(":").map(Number); return new Date(d0).setHours(h, m, 0, 0); };
+    const ns = at($("add-log-start").value), ne = $("add-log-end").value === "00:00" ? d0 + DAY : at($("add-log-end").value);
+    if (ne - ns < MIN) { fail("Dapat mas maaga ang start kaysa sa end."); return; }
+    if (ne > Date.now() + MIN) { fail("Time traveler ka? Di pa nangyayari 'yan."); return; }
+    if (current && ne > current.start) { fail("Sumasabit 'yan sa ginagawa mo ngayon. Stop mo muna, or i-edit ang start noon."); return; }
+    const logged = (days[addLog.key] || []).reduce((a, v) => a + overlapMs(v, { start: ns, end: ne }), 0);
+    if (logged >= MIN && !confirm("Mapapalitan nito ang " + fmtDur(logged) + " na naka-log na. Sure ka?")) return;
+    const before = snapshotLogs(ns, ne);
+    addSession(addLog.cat, ns, ne, addLog.sub || undefined);
+    closeAddLog(); render();
+    showUndo("Goods, nadagdag na.", () => restoreLogs(before));
   });
 
   // ---------- goals ----------
@@ -2184,8 +2294,9 @@ nav.tabs .badge { position: absolute; top: 1px; left: calc(50% + 6px); min-width
     }
     $("quiz").scrollTop = 0;
   }
-  function openQuiz() {
-    quiz = { step: 0, roles: [], tiles: [], custom: [], offered: [], schedCat: null, schedDays: [1, 2, 3, 4, 5], schedStart: "09:00", schedEnd: "18:00" };
+  // again: the setup is being redone after a reset, so there are real tiles to protect.
+  function openQuiz(again) {
+    quiz = { again: !!again, step: 0, roles: [], tiles: [], custom: [], offered: [], schedCat: null, schedDays: [1, 2, 3, 4, 5], schedStart: "09:00", schedEnd: "18:00" };
     drawQuiz();
     $("quiz").hidden = false;
   }
@@ -2197,6 +2308,11 @@ nav.tabs .badge { position: absolute; top: 1px; left: calc(50% + 6px); min-width
       return { id, name: c.name, c: NEW_QUIZ_COLOR };
     });
     setCats(list); saveCats();
+    // Redoing the setup can remove tiles, and goals and schedules can't point at a tile that's gone.
+    if (quiz.again) {
+      goals = goals.filter(g => ids.includes(g.cat)); saveGoals();
+      schedules = schedules.filter(x => ids.includes(x.cat)); saveSchedules();
+    }
     if (quiz.schedCat && ids.includes(quiz.schedCat)) {
       schedules = schedules.concat([{ id: uid(), cat: quiz.schedCat, days: quiz.schedDays, start: quiz.schedStart, end: quiz.schedEnd }]);
       saveSchedules();
@@ -2205,7 +2321,10 @@ nav.tabs .badge { position: absolute; top: 1px; left: calc(50% + 6px); min-width
     render();
   }
   const NEW_QUIZ_COLOR = "#4FB394";
-  $("quiz-skip").addEventListener("click", () => finishQuiz(QUIZ_SKIP_TILES));
+  $("quiz-skip").addEventListener("click", () => {
+    if (quiz.again) { $("quiz").hidden = true; quiz = null; render(); return; }   // keeps the tiles they already have
+    finishQuiz(QUIZ_SKIP_TILES);
+  });
   $("quiz-back").addEventListener("click", () => { quiz.step--; drawQuiz(); });
   $("quiz-next").addEventListener("click", () => {
     const fail = text => { $("quiz-err").textContent = text; $("quiz-err").hidden = false; };
@@ -2347,11 +2466,13 @@ nav.tabs .badge { position: absolute; top: 1px; left: calc(50% + 6px); min-width
   $("stop-btn").addEventListener("click", stopNow);
   $("extra-subs").addEventListener("click", () => { liveOpen = liveOpen === "subs" ? null : "subs"; render(); });
   $("extra-kas").addEventListener("click", () => { liveOpen = liveOpen === "kas" ? null : "kas"; render(); });
-  $("live-edit").addEventListener("click", () => {
+  function editLiveStart() {
     if (!current) return;
     toastTap = Date.now();
     askStartTime(null, toastTap, current.start);
-  });
+  }
+  $("live-edit").addEventListener("click", editLiveStart);
+  $("sheet-live-start").addEventListener("click", () => { closeSheet(); editLiveStart(); });
 
   // ---------- tabs ----------
   const tabs = { now: "view-now", gaps: "view-gaps", week: "view-week", settings: "view-settings" };
@@ -2440,7 +2561,7 @@ nav.tabs .badge { position: absolute; top: 1px; left: calc(50% + 6px); min-width
     showApp(); render();
     if (!hadLocal) openQuiz();
     setSync("Naka-save lang sa browser na 'to. Mag-login para ma-sync.", true);
-    $("acct-who").textContent = "Walang account. Nasa browser na 'to lang ang logs mo.";
+    $("acct-who").textContent = "Walang account. Nasa browser lang na 'to ang logs mo.";
     $("signout-btn").textContent = "Bumalik sa login";
   }
 
@@ -2735,6 +2856,8 @@ nav.tabs .badge { position: absolute; top: 1px; left: calc(50% + 6px); min-width
     // An account with no logs and no saved tiles looks brand new, and would get the quiz on the next open.
     if (mode === "db") saveCats();
   }
+  $("reset3-no").addEventListener("click", () => { $("reset3-wrap").classList.remove("show"); showToast("Okay, fresh start!", []); });
+  $("reset3-yes").addEventListener("click", () => { $("reset3-wrap").classList.remove("show"); openQuiz(true); });
   const closeReset = () => { $("reset-wrap").classList.remove("show"); $("reset2-wrap").classList.remove("show"); };
   $("reset-btn").addEventListener("click", () => { $("reset-wrap").classList.add("show"); });
   $("reset-next").addEventListener("click", () => {
@@ -2752,7 +2875,7 @@ nav.tabs .badge { position: absolute; top: 1px; left: calc(50% + 6px); min-width
     try {
       await resetLogs();
       closeReset(); render();
-      showToast("Okay, malinis na. Fresh start!", []);
+      $("reset3-wrap").classList.add("show");
     } catch (e) {
       $("reset-err").textContent = e && e.plain ? e.plain : "Di na-reset. Kailangan ng internet. Walang nabura.";
       $("reset-err").hidden = false;
