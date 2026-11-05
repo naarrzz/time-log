@@ -180,7 +180,7 @@ header.top .date { color: var(--ink-soft); font-size: 13px; font-weight: 600; }
 
 /* Tabs: a capsule floating over the content. The glass itself is in the Glass block below. */
 nav.tabs { position: fixed; left: 0; right: 0; bottom: max(10px, env(safe-area-inset-bottom)); display: flex; justify-content: center; padding: 0 16px; z-index: 10; pointer-events: none; }
-nav.tabs .in { position: relative; display: flex; width: min(300px, 100%); padding: 5px; border-radius: 30px; overflow: hidden; pointer-events: auto; touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; background: var(--surface); box-shadow: 0 8px 24px rgba(0,0,0,.18); transition: scale .3s cubic-bezier(.3, 1.6, .5, 1); }
+nav.tabs .in { position: relative; display: flex; width: min(300px, 100%); padding: 5px; border-radius: 30px; pointer-events: auto; touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; background: var(--surface); box-shadow: 0 8px 24px rgba(0,0,0,.18); transition: scale .3s cubic-bezier(.3, 1.6, .5, 1); }
 nav.tabs .in.holding { scale: 1.02; }
 /* One highlight slides between the tabs like a drop of glass: it overshoots a bit and stretches as it moves. */
 .tab-glass { position: absolute; top: 5px; bottom: 5px; left: 5px; width: calc((100% - 10px) / 4); border-radius: 25px; background: var(--fill);
@@ -191,6 +191,24 @@ nav.tabs .in.holding { scale: 1.02; }
 nav.tabs .in.dragging button { color: var(--ink-soft); }
 nav.tabs .in.dragging button.peek { color: var(--accent); }
 .tab-glass.squish { animation: squish .45s ease-out; }
+/* Holding lifts the highlight into a lens that follows the finger and magnifies what's under it.
+   The real thing bends the page behind it, which Safari can't do, so the lens carries its own bigger copy of the tabs. */
+.tab-lens { position: absolute; top: 5px; bottom: 5px; left: 5px; width: calc((100% - 10px) / 4); z-index: 2; pointer-events: none; opacity: 0;
+  translate: calc(var(--i, 0) * 100%) 0; transition: translate .45s cubic-bezier(.3, 1.25, .4, 1), scale .3s cubic-bezier(.3, 1.6, .5, 1), opacity .16s ease-out; }
+.tab-lens-box { position: absolute; inset: -2px -11px; border-radius: 27px; overflow: hidden;
+  background: linear-gradient(to bottom, var(--glass-sheen), transparent 45%), color-mix(in srgb, var(--surface) 97%, transparent);
+  box-shadow: inset 0 0 0 .5px var(--glass-edge), inset 0 1px 1px var(--glass-top), inset 0 -1px 2px rgba(0,0,0,.08), 0 0 0 .5px rgba(0,0,0,.14), 0 6px 16px rgba(0,0,0,.2); }
+.tab-lens-row { position: absolute; top: 2px; bottom: 2px; left: 11px; width: calc((100% - 22px) * 4); display: flex; color: var(--accent); font: 500 11px var(--body);
+  translate: calc(var(--i, 0) * -25%) 0; transition: translate .45s cubic-bezier(.3, 1.25, .4, 1); }
+.tab-lens-row span { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 5px 4px 4px; }
+/* The edge: content near it smears a little, and it splits light into faint color. */
+.tab-lens-box::before, .tab-lens-box::after { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; }
+.tab-lens-box::before { z-index: 1; padding: 4px; }
+.tab-lens-box::after { z-index: 2; padding: 2px; background: conic-gradient(from 210deg, rgba(90,200,250,.5), rgba(255,255,255,.25) 18%, rgba(255,214,90,.45) 34%, rgba(255,255,255,.25) 50%, rgba(255,120,220,.45) 66%, rgba(255,255,255,.25) 82%, rgba(90,200,250,.5)); }
+.lens .tab-lens { opacity: 1; scale: 1.2; translate: var(--x, 0) 0; transition: translate .06s linear, scale .3s cubic-bezier(.3, 1.6, .5, 1), opacity .1s ease-out; }
+.lens .tab-lens-box::before { -webkit-backdrop-filter: blur(1.5px) saturate(1.4); backdrop-filter: blur(1.5px) saturate(1.4); }
+.lens .tab-lens-row { translate: calc(var(--x, 0) * -1) 0; transition: translate .06s linear; }
+.lens .tab-glass { opacity: 0; }
 nav.tabs button.on svg { animation: tab-icon .4s cubic-bezier(.3, 1.6, .5, 1); }
 nav.tabs button { flex: 1; appearance: none; border: 0; background: transparent; color: var(--ink-soft); display: flex; flex-direction: column; align-items: center; gap: 1px;
   font: 500 11px var(--body); padding: 5px 4px 4px; border-radius: 25px; cursor: pointer; position: relative; z-index: 1; transition: color .2s ease; }
@@ -215,6 +233,9 @@ nav.tabs .badge { position: absolute; top: 1px; left: calc(50% + 6px); min-width
 }
 @media (prefers-reduced-transparency: reduce) {
   nav.tabs .in, .sheet-wrap.center .sheet { background: var(--surface); -webkit-backdrop-filter: none; backdrop-filter: none; }
+  .tab-lens-box { background: var(--surface); }
+  .lens .tab-lens-box::before { -webkit-backdrop-filter: none; backdrop-filter: none; }
+  .tab-lens-box::after { display: none; }
   .toast { background: var(--toast-bg); -webkit-backdrop-filter: none; backdrop-filter: none; }
 }
 /* Kasabay (secondary) tags */
@@ -674,6 +695,7 @@ nav.tabs .badge { position: absolute; top: 1px; left: calc(50% + 6px); min-width
 
 <nav class="tabs" id="tabs" hidden><div class="in">
   <span class="tab-glass" id="tab-glass" aria-hidden="true"></span>
+  <span class="tab-lens" aria-hidden="true"><span class="tab-lens-box"><span class="tab-lens-row" id="tab-lens-row"></span></span></span>
   <button id="tab-now" class="on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg>Ngayon</button>
   <button id="tab-gaps"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke-dasharray="3.2 3.6"/></svg>Gaps<span class="badge" id="gap-badge" hidden></span></button>
   <button id="tab-week"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 20v-6M12 20V5M19 20v-10"/></svg>Week</button>
@@ -2533,7 +2555,7 @@ nav.tabs .badge { position: absolute; top: 1px; left: calc(50% + 6px); min-width
   let sweepTimer = null;
   Object.keys(tabs).forEach((k, i) => $("tab-" + k).addEventListener("click", () => {
     if ($(tabs[k]).hidden) {
-      $("tab-glass").style.setProperty("--i", i);
+      document.querySelector("nav.tabs .in").style.setProperty("--i", i);
       playOnce($("tab-glass"), "squish");
     }
     if (k === "week" && $("view-week").hidden) {
@@ -2549,7 +2571,19 @@ nav.tabs .badge { position: absolute; top: 1px; left: calc(50% + 6px); min-width
   // This one needs script, since CSS can't follow a finger.
   (() => {
     const bar = document.querySelector("nav.tabs .in"), keys = Object.keys(tabs);
-    let held = null, justDragged = false;
+    let held = null, justDragged = false, lensTimer = null;
+    // The lens's own copy of the tabs.
+    keys.forEach(k => {
+      const tab = $("tab-" + k), item = document.createElement("span");
+      item.append(tab.querySelector("svg").cloneNode(true), [...tab.childNodes].find(n => n.nodeType === 3).textContent);
+      $("tab-lens-row").appendChild(item);
+    });
+    const startDrag = x => {
+      clearTimeout(lensTimer);
+      held.dragging = true;
+      place(x);
+      bar.classList.add("dragging", "lens");
+    };
     const place = x => {
       const box = bar.getBoundingClientRect(), w = (box.width - 10) / keys.length;
       const left = Math.min(Math.max(x - box.left - 5 - w / 2, 0), w * (keys.length - 1));
@@ -2562,18 +2596,22 @@ nav.tabs .badge { position: absolute; top: 1px; left: calc(50% + 6px); min-width
       if (!held) return;
       const k = held.dragging && open ? place(open.clientX) : null;
       if (held.dragging) { justDragged = true; setTimeout(() => { justDragged = false; }, 400); }
+      clearTimeout(lensTimer);
       held = null;
-      bar.classList.remove("holding", "dragging");
+      bar.classList.remove("holding", "dragging", "lens");
       keys.forEach(j => $("tab-" + j).classList.remove("peek"));
       if (k) $("tab-" + k).click();
     };
-    bar.addEventListener("pointerdown", e => { held = { x: e.clientX, dragging: false }; bar.classList.add("holding"); });
+    bar.addEventListener("pointerdown", e => {
+      held = { x: e.clientX, dragging: false };
+      bar.classList.add("holding");
+      // A quick tap shouldn't flash the lens, so it waits a beat. Then it comes to the finger, wherever that is.
+      lensTimer = setTimeout(() => { if (held) startDrag(held.x); }, 180);
+    });
     window.addEventListener("pointermove", e => {
       if (!held) return;
       if (!held.dragging && Math.abs(e.clientX - held.x) < 6) return;
-      held.dragging = true;
-      bar.classList.add("dragging");
-      place(e.clientX);
+      if (!held.dragging) startDrag(e.clientX); else place(e.clientX);
     });
     window.addEventListener("pointerup", e => end(e));
     window.addEventListener("pointercancel", () => end(null));
