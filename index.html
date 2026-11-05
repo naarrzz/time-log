@@ -89,6 +89,9 @@ header.top .date { color: var(--ink-soft); font-size: 13px; }
 .ripple { position: absolute; border-radius: 50%; background: var(--c); opacity: .28; transform: scale(0); pointer-events: none; animation: ripple .45s ease-out forwards; }
 .tile:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 
+.add-tile { border-style: dashed; color: var(--ink-soft); background: transparent; }
+.add-tile .plus { font-size: 18px; line-height: 12px; position: relative; z-index: 1; }
+
 /* Buttons */
 .btn { appearance: none; border: 1px solid var(--line); background: var(--surface); color: var(--ink);
   border-radius: 999px; padding: 8px 14px; font: 600 13px var(--body); cursor: pointer; }
@@ -362,6 +365,21 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
     <div class="chips">
       <button class="btn" id="sheet-delete">Delete log</button>
       <button class="btn primary" id="sheet-close">Done</button>
+    </div>
+  </div>
+</div>
+
+<div class="sheet-wrap" id="new-tile-wrap">
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="new-tile-title">
+    <h3 id="new-tile-title">New tile, sino 'yan?</h3>
+    <div class="cat-row" style="grid-template-columns:40px 1fr">
+      <input type="color" id="new-tile-color" aria-label="Kulay ng tile">
+      <input type="text" id="new-tile-name" maxlength="24" placeholder="Pangalan" aria-label="Pangalan ng tile">
+    </div>
+    <p class="sync warn" id="new-tile-err" role="alert" style="margin:0" hidden></p>
+    <div class="chips">
+      <button class="btn" id="new-tile-cancel">Nvm</button>
+      <button class="btn primary" id="new-tile-save">Add</button>
     </div>
   </div>
 </div>
@@ -882,6 +900,13 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
     if (sig !== tilesSig) {
       el.innerHTML = "";
       cats.forEach(c => { const b = tileButton(c, () => switchTo(c.id), false); b.dataset.id = c.id; el.appendChild(b); });
+      const add = document.createElement("button");
+      add.className = "tile add-tile"; add.style.setProperty("--c", "var(--accent)");
+      const plus = document.createElement("span"); plus.className = "plus"; plus.setAttribute("aria-hidden", "true"); plus.textContent = "+";
+      const label = document.createElement("span"); label.className = "t"; label.textContent = "Add tile";
+      add.append(plus, label);
+      add.addEventListener("click", openNewTile);
+      el.appendChild(add);
       tilesSig = sig;
     }
     el.querySelectorAll(".tile").forEach(b => {
@@ -1373,6 +1398,29 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
     schedules = schedDraft.isNew ? schedules.concat([rec]) : schedules.map(x => x.id === rec.id ? rec : x);
     saveSchedules(); closeSchedule(); renderSchedules();
     showToast("Goods, saved. Sa next tap mo ito magsisimula.", []);
+  });
+
+  // ---------- add a tile right from the grid ----------
+  const NEW_TILE_COLORS = ["#2F6FBF", "#7A4FC9", "#C2437A", "#1F8A6B", "#E0682B", "#C9A227", "#3AA0B8", "#8DB255", "#D14B4B", "#9C6B3F"];
+  function openNewTile() {
+    const used = CATS.filter(c => !c.hidden).map(c => c.c.toLowerCase());
+    $("new-tile-color").value = NEW_TILE_COLORS.find(c => !used.includes(c.toLowerCase())) || NEW_TILE_COLORS[0];
+    $("new-tile-name").value = "";
+    $("new-tile-err").hidden = true;
+    $("new-tile-wrap").classList.add("show");
+    $("new-tile-name").focus();
+  }
+  const closeNewTile = () => $("new-tile-wrap").classList.remove("show");
+  $("new-tile-cancel").addEventListener("click", closeNewTile);
+  $("new-tile-wrap").addEventListener("click", e => { if (e.target.id === "new-tile-wrap") closeNewTile(); });
+  $("new-tile-save").addEventListener("click", () => {
+    const name = $("new-tile-name").value.trim();
+    const fail = text => { $("new-tile-err").textContent = text; $("new-tile-err").hidden = false; };
+    if (!name) { fail("Lagyan muna ng pangalan."); return; }
+    if (CATS.some(c => !c.hidden && c.name.toLowerCase() === name.toLowerCase())) { fail("May ganyan ka na."); return; }
+    setCats(CATS.concat([{ id: uid(), name, c: $("new-tile-color").value }]));
+    saveCats(); closeNewTile(); render();
+    showToast(name + ", welcome sa tiles mo!", []);
   });
 
   // ---------- edit tiles ----------
