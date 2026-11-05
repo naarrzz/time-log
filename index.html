@@ -361,7 +361,7 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
       </div>
     </div>
   </section>
-  <p class="credit">v1.1.1 · by Narz Angelo Alcaide</p>
+  <p class="credit">v1.1.2 · by Narz Angelo Alcaide</p>
 </div>
 
 <div class="toast" id="toast" role="status" aria-live="polite">
@@ -507,7 +507,7 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
   const days = {};               // key -> sessions[]
   const kasDays = {};            // key -> finished Kasabay [{ id, c, cat, start, end }]
   let lastClosed = null;         // { key, id } of the session closed by the latest switch
-  let toastTap = 0, toastTimer = null, kasTap = 0, showAllKas = false, kasPop = null, liveShown = null, liveChipSig = "";
+  let toastTap = 0, toastTimer = null, kasTap = 0, showAllKas = false, kasPop = null, liveShown = null, liveChipSig = "", lastSwitch = null;
   let gapDay = "today", skipped = new Set();
   let editing = null;            // { key, id }
 
@@ -724,7 +724,7 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
       showToast("Okay, tapos na ang side quest na " + CAT[cat].name + ".", []);
       return;
     }
-    current.kas = (current.kas || []).concat([{ cat, start: now }]);
+    current.kas = (current.kas || []).concat([{ cat, start: resumeStart(cat, now) }]);
     kasTap = now; kasPop = cat;
     saveCurrent(); render();
     showToast(CAT[current.cat].name + " + " + CAT[cat].name + "? Multitasker ka ah. Kanina pa ba 'yan?", [15, 30, 60], m => backdateKas(cat, m), now);
@@ -736,8 +736,18 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
     saveCurrent(); render();
     showToast("Noted, " + CAT[cat].name + " since " + fmtTime(k.start) + ".", []);
   }
+  // A Kasabay that stopped under 2 minutes ago picks up where it left off, instead of starting a second entry.
+  function resumeStart(cat, now) {
+    const key = keyOf(now), prev = (kasDays[key] || []).find(k => k.cat === cat && k.end <= now && now - k.end < 2 * MIN);
+    if (!prev) return now;
+    kasDays[key] = kasDays[key].filter(k => k !== prev);
+    saveDay(key);
+    return prev.start;
+  }
   function switchTo(cat) {
     const now = Date.now();
+    const back = lastSwitch && lastSwitch.cat === cat && now - lastSwitch.at < 5 * MIN ? lastSwitch : null;
+    lastSwitch = current ? { cat: current.cat, at: now, kas: (current.kas || []).filter(k => !k.auto).map(k => k.cat) } : null;
     if (current) closeCurrent(now);
     if (current && current.cat === cat) {
       current = null;
@@ -746,13 +756,19 @@ nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin
       return;
     }
     const kas = autoKas(cat, now);
+    // Back on the tile they just left, likely a misclick: what was running alongside it keeps going.
+    const resumed = back ? back.kas.filter(c => c !== cat && CAT[c] && !CAT[c].hidden) : [];
+    resumed.forEach(c => { if (!kas.some(k => k.cat === c)) kas.push({ cat: c, start: now }); });
+    if (back) kas.forEach(k => { k.start = resumeStart(k.cat, now); });
     current = { cat, start: now, kas };
     toastTap = now;
     saveCurrent(); render();
+    if (resumed.length) { showToast("Balik sa " + CAT[cat].name + ". Tuloy ang Kasabay: " + resumed.map(c => CAT[c].name).join(", ") + ".", []); return; }
     showToast(CAT[cat].name + ", noted!" + (kas.length ? " Kasabay ng " + kas.map(k => CAT[k.cat].name).join(", ") + "." : "") + " Kanina pa ba 'yan?", [15, 30, 60]);
   }
   function stopNow() {
     if (!current) return;
+    lastSwitch = { cat: current.cat, at: Date.now(), kas: (current.kas || []).filter(k => !k.auto).map(k => k.cat) };
     closeCurrent(Date.now());
     const name = CAT[current.cat].name;
     current = null;
