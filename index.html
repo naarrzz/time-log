@@ -3022,9 +3022,11 @@ nav.tabs .badge { position: absolute; top: 1px; left: calc(50% + 6px); min-width
     applyTheme(choice);
   }));
   // Auto follows the device live, so the status bar color has to follow too.
-  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
+  const refreshAutoAppearance = () => {
     if (!document.documentElement.dataset.theme) applyTheme("auto");
-  });
+  };
+  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", refreshAutoAppearance);
+  window.addEventListener("timelog-appearance-change", refreshAutoAppearance);
 
   // ---------- login ----------
   const LOGIN_ERRORS = {
