@@ -2865,8 +2865,23 @@ nav.tabs .badge { position: absolute; top: 1px; left: calc(50% + 6px); min-width
   }
   if (nativeBridge) {
     document.documentElement.classList.add("native");
-    new MutationObserver(() => { if (!nativeUiQueued) { nativeUiQueued = true; requestAnimationFrame(nativeUi); } })
-      .observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ["class", "hidden"] });
+    const queueNativeUi = () => {
+      if (!nativeUiQueued) { nativeUiQueued = true; requestAnimationFrame(nativeUi); }
+    };
+    const observer = new MutationObserver(queueNativeUi);
+    // Only the controls that affect the native tab bar need watching. The full page contains
+    // frequently rebuilt log lists, so observing document.body needlessly tracks every row.
+    observer.observe($("tabs"), { attributes: true, attributeFilter: ["hidden"] });
+    observer.observe($("quiz"), { attributes: true, attributeFilter: ["hidden"] });
+    ["now", "gaps", "week", "settings"].forEach(id => {
+      observer.observe($("tab-" + id), { attributes: true, attributeFilter: ["class", "hidden"] });
+    });
+    observer.observe($("gap-badge"), {
+      attributes: true, attributeFilter: ["hidden"], childList: true, characterData: true, subtree: true
+    });
+    document.querySelectorAll(".sheet-wrap").forEach(sheet => {
+      observer.observe(sheet, { attributes: true, attributeFilter: ["class", "hidden"] });
+    });
   }
 
   // ---------- boot ----------
