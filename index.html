@@ -1427,14 +1427,17 @@ nav.tabs .badge { position: absolute; top: 1px; left: calc(50% + 6px); min-width
     list.forEach(x => { t[x.cat] = (t[x.cat] || 0) + (x.end - x.start); });
     return t;
   }
+  const skipKey = (key, g) => key + ":" + g.start + ":" + (g.open ? "now" : g.end);
   function gapsFor(key) {
     const d0 = midnight(new Date(key.replace(/-/g, "/")).getTime());
     const end = Math.min(Date.now(), d0 + DAY);
     const occ = sessionsFor(key, true);
     const gaps = []; let cur = d0;
     occ.forEach(x => { if (x.start - cur >= GAP_MIN) gaps.push({ start: cur, end: x.start }); cur = Math.max(cur, x.end); });
-    if (end - cur >= GAP_MIN) gaps.push({ start: cur, end });
-    return gaps.filter(g => !skipped.has(key + ":" + g.start));
+    // The last gap of today runs until now, so its end keeps moving: it counts as "now", not a time.
+    if (end - cur >= GAP_MIN) gaps.push({ start: cur, end, open: end < d0 + DAY });
+    // A skip is for that exact gap. Editing a log next to it changes the gap, so it shows again.
+    return gaps.filter(g => !skipped.has(skipKey(key, g)));
   }
 
   // ---------- render ----------
@@ -1677,7 +1680,7 @@ nav.tabs .badge { position: absolute; top: 1px; left: calc(50% + 6px); min-width
       title: fmtTime(g.start) + " – " + fmtTime(g.end),
       gap: { end: g.end, before: null, filled: 0 }
     }), false)));
-    $("gap-skip").onclick = () => { skipped.add(key + ":" + g.start); renderGaps(); };
+    $("gap-skip").onclick = () => { skipped.add(skipKey(key, g)); renderGaps(); };
   }
   // One plain sentence on top of Week, then progress for each goal.
   const OVER_QUOTES = ["Baka mapano ka niyan.", "Hinay-hinay lang, bes.", "Pahinga rin pag may time.", "Sige ka, ikaw rin."];
