@@ -592,6 +592,13 @@ nav.tabs .badge { position: absolute; top: 1px; left: calc(50% + 6px); min-width
         </div>
       </div>
       <div class="card">
+        <h2>Language</h2>
+        <div class="seg" id="lang-seg" role="group" aria-label="Language">
+          <button data-lang-pick="fil">Filipino</button>
+          <button data-lang-pick="en">English</button>
+        </div>
+      </div>
+      <div class="card">
         <h2>Data</h2>
         <div class="chips">
           <button class="btn" id="export-btn">Backup</button>
@@ -880,6 +887,210 @@ nav.tabs .badge { position: absolute; top: 1px; left: calc(50% + 6px); min-width
   const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   const dayLabel = key => { const [y, m, d] = key.split("-").map(Number); const dt = new Date(y, m - 1, d); return DOW[dt.getDay()] + ", " + MON[m - 1] + " " + d; };
+  // ---------- language (saved per device) ----------
+  // The app is written in Taglish. English swaps the words as they reach the screen: whole lines from EN, and lines
+  // with a name or a number inside from EN_RE. Tile names and labels are yours, so they never change.
+  const EN = {
+    // tabs, titles, buttons
+    "Ngayon": "Now", "Kahapon": "Yesterday", "ngayon": "now", "Sandali": "Hang on",
+    "So, anong ganap?": "So, whatcha doin'?", "Wala kang ganap?": "Nothing going on?", "Tap ka lang sa baba": "Tap a tile below",
+    "Stop na": "Stop", "Palitan ang start": "Change start", "Delete log": "Delete log", "Iba pa": "More",
+    "Kasabay": "Multitasking", "Kasabay ng:": "Also doing:", "+ Kasabay": "+ Multitask", "+ Add Kasabay": "+ Add multitask",
+    "Mga log today": "Today's logs", "Anong ganap dito?": "What happened here?", "Walang gaps": "No gaps",
+    "Kumpleto today. Ang sipag, infairness.": "All caught up today. Look at you go.",
+    "Saan napunta oras mo?": "Where'd your time go?", "Saan napupunta oras mo?": "Where does your time go?",
+    "Favorite combo mo": "Your favorite combo", "Hati ang atensyon": "Split attention",
+    "Goal o limit": "Goal or limit", "+ Add goal o limit": "+ Add goal or limit", "Goals at limits": "Goals and limits",
+    "Goal para sa gusto mong abutin, limit para sa ayaw mong sumobra. Makikita mo ang progress sa Week.": "Goals are for what you want more of, limits for what you want less of. Progress shows up in Week.",
+    "Anong tile?": "Which tile?", "Ilang oras?": "How many hours?", "Ilang beses a week?": "How many times a week?", "Araw-araw": "Every day",
+    "Anong araw?": "Which days?", "Last day (optional)": "Last day (optional)",
+    "May work o klase na fixed ang oras? Kusa itong magka-Kasabay sa mga oras na 'yon.": "Got work or class at fixed hours? It gets added as multitasking during those hours, automatically.",
+    "Rename, recolor, reorder, go. Safe pa rin ang old logs kahit tanggalin mo ang tile.": "Rename, recolor, reorder, go. Old logs stay safe even if you remove a tile.",
+    "New tile, anong ganap?": "New tile. What's the occasion?", "Ayusin natin 'to": "Let's fix this",
+    "Heads up: sa browser lang na 'to mase-save ang logs mo.": "Heads up: your logs only save in this browser.",
+    "Login muna, para synced yung logs mo on any device.": "Log in so your logs sync on every device.",
+    "Nakalimutan ang password?": "Forgot your password?", "Try muna, no account": "Just try it, no account",
+    "Wala pang account? Gawa tayo": "No account yet? Let's make one", "May account na pala? Login dito": "Already have an account? Log in here",
+    "Gawa na": "Create account", "Retype password": "Retype password",
+    "Sure na sure?": "Like, really sure?", "Hindi na 'to mababawi. Wala nang undo.": "This can't be undone. No take-backs.",
+    "Oo, burahin lahat": "Yes, delete it all", "Wag na": "Nope", "Tuloy": "Continue", "Ituloy na": "Keep going",
+    "Malinis na!": "Squeaky clean!", "Setup ulit": "Set up again",
+    "Gusto mo bang mag-setup ulit ng tiles mula sa simula? Pwede ring ituloy na lang ang tiles mo ngayon.": "Want to set up your tiles from scratch? Or just keep the ones you have.",
+    "Mabubura lahat ng logs mo, pati Kasabay at ang tumatakbo ngayon. Maiiwan ang tiles, goals at schedule. Kung gusto mo ng kopya, mag-Backup muna.": "This deletes all your logs, multitasking and the one running now. Tiles, goals and schedule stay. Want a copy? Back up first.",
+    "Kumokonekta…": "Connecting…", "Nagsi-sync…": "Syncing…", "Naka-sync": "Synced",
+    // aria labels and placeholders
+    "Nakaraang araw": "Previous day", "Susunod na araw": "Next day", "Nakaraang linggo": "Previous week", "Susunod na linggo": "Next week",
+    "Gaano kadalas": "How often", "Ilang beses a week": "Times a week", "Kulay ng tile": "Tile color", "Pangalan": "Name",
+    "Pangalan ng tile": "Tile name", "Uri": "Type", "Oras ng simula": "Start time", "Bagong sub-label": "New sub-label",
+    "Dagdag na sub-label": "Add a sub-label", "Ano 'yan?": "What's that?", "Ibang tile": "Another tile", "Burahin ang log": "Delete log",
+    "May nakalimutan? Type mo dito": "Forgot one? Type it here", "Sub-labels (optional): ano specifically?": "Sub-labels (optional): like what?",
+    // live card and toasts
+    "Ano pa ang ginagawa mo nang sabay? Hindi ito dagdag sa oras mo, pero makikita kung nahati ang atensyon mo.": "What else are you doing at the same time? It doesn't add time, but it shows when your attention was split.",
+    "Kanina pa ba 'yan?": "Been at it a while?", "Kanina pa?": "Started earlier?", "Nope, ngayon lang": "Nope, just now", "Pili akong time": "Pick a time",
+    "Lagyan muna ng oras.": "Add a time first.", "Time traveler ka? Mamaya pa 'yan. Pili ulit.": "Time traveler? That's later. Pick again.",
+    "Goods": "Got it", "Goods, naayos na.": "Fixed. You're welcome.", "Goods, nadagdag na.": "Added. Nice.",
+    "Pinagsama ko sa katabing log.": "Merged it with the log next to it.",
+    "Tanggal na ang log.": "Log deleted.", "Okay, fresh start!": "Okay, fresh start!",
+    "Goods, saved. Sa next tap mo ito magsisimula.": "Saved. It kicks in on your next tap.",
+    "Goods, set na ang goal.": "Goal set. Go get it.", "Goods, set na ang limit.": "Limit set. Stay strong.",
+    "Okay, tanggal na ang goal.": "Goal removed.", "Okay, tanggal na ang schedule.": "Schedule removed.",
+    "Goods, updated na tiles mo.": "Tiles updated. Fresh.",
+    "Di na-download ang backup. Try ulit?": "The backup didn't download. Try again?",
+    "Hindi Time Log backup ang file na 'yan. Walang nabago.": "That's not a Time Log backup. Nothing changed.",
+    "Walang logs sa backup na 'yan.": "That backup has no logs in it.", "Kumpleto na pala, walang kailangang ibalik.": "Already complete. Nothing to bring back.",
+    // lists and empty states
+    "Wala pa. Chill ka pa siguro.": "Nothing yet. Taking it easy, huh.", "Sandali, kinukuha pa…": "Hang on, loading…",
+    "Empty pa. Tap ka ng tile sa taas.": "Nothing yet. Tap a tile up top.", "Walang naka-log dito.": "Nothing logged here.",
+    "Kinukuha pa ang logs ng araw na 'to…": "Loading this day's logs…", "Wala. Focused, love it.": "None. Focused. Love it.", "Wala pa.": "None yet.",
+    "Wala pang Kasabay. Focused ka ba talaga, or di mo lang tina-tap?": "No multitasking yet. Super focused, or just not tapping?",
+    "Tapos na": "Done", "Itago ang tinanggal": "Hide removed", "↑ Itaas": "↑ Move up",
+    // goals insight
+    "Pasok lahat ng goals mo. Ang galing!": "All goals hit. Show-off.", "Swak pa sa limits mo. Keep it up!": "Still within your limits. Keep it up!",
+    "Baka mapano ka niyan.": "That can't be healthy.", "Hinay-hinay lang, bes.": "Easy there, champ.",
+    "Pahinga rin pag may time.": "Rest is a thing too.", "Sige ka, ikaw rin.": "Your call. Just saying.",
+    // sheets and checks
+    "Lagyan muna ng oras pareho.": "Add both times first.", "Dapat mas maaga ang start kaysa sa end.": "Start has to come before end.",
+    "Time traveler ka? Di pa nangyayari 'yan.": "Time traveler? That hasn't happened yet.",
+    "Sumasabit 'yan sa ginagawa mo ngayon. Stop mo muna, or i-edit ang start noon.": "That runs into what you're doing now. Stop it first, or edit its start.",
+    "Pili muna ng tile.": "Pick a tile first.", "May ganyan na ang tile na 'yan.": "That tile already has one of those.",
+    "Pili kahit isang araw.": "Pick at least one day.", "Pili kahit isa.": "Pick at least one.",
+    "Lagyan muna ng pangalan.": "Give it a name first.", "May ganyan ka na.": "You already have that one.",
+    "May tile na walang pangalan.": "One tile has no name.", "Kailangan ng kahit isang tile.": "You need at least one tile.",
+    "May dalawang tile na pareho ang pangalan.": "Two tiles have the same name.",
+    // quiz
+    "Uy! So, anong ganap mo sa life ngayon?": "Hey! So, what's life looking like these days?",
+    "Pili lahat ng swak. Dito natin ibabase ang tiles mo.": "Pick everything that fits. Your tiles start from this.",
+    "Naka-pili na ang mga malamang. Tap para dagdagan o tanggalin.": "We picked the likely ones. Tap to add or remove.",
+    "May fixed na oras ka ba?": "Got fixed hours?",
+    "Gaya ng trabaho o klase. Kusa itong magiging Kasabay sa mga oras na 'yon. Optional lang, at pwedeng dagdagan sa Settings.": "Like work or class. It gets added as multitasking during those hours. Totally optional, and you can add more in Settings.",
+    "Freelance o side hustle": "Freelance or side hustle", "May negosyo": "Business owner", "Let's go": "Let's go",
+    // account, sync, errors
+    "Naka-save lang sa browser na 'to. Mag-login para ma-sync.": "Only saved in this browser. Log in to sync.",
+    "Walang account. Nasa browser lang na 'to ang logs mo.": "No account. Your logs only live in this browser.",
+    "Bumalik sa login": "Back to login", "Sarado na, ayusin": "Closed it, fix it",
+    "Binago ng lumang Time Log ang logs mo. Kung may nakabukas pa sa ibang tab o device, isara mo muna.": "An old Time Log changed your logs. If it's still open in another tab or device, close it first.",
+    "Offline. Naka-save sa device, magsi-sync pag may internet.": "Offline. Saved on this device, syncs when you're back online.",
+    "Nawala ang koneksyon sa data. I-refresh mamaya.": "Lost the connection to your data. Refresh in a bit.",
+    "Hindi na-save ang huling pagbabago. Subukan ulit mamaya.": "Your last change didn't save. Try again later.",
+    "Di ma-load ang araw na 'yan. Kailangan ng internet.": "Couldn't load that day. Needs internet.",
+    "Hindi ma-load ang sync. I-check ang internet tapos buksan ulit.": "Sync didn't load. Check your internet and reopen.",
+    "Walang access sa data ang account na 'to. I-check ang Firestore rules.": "This account can't reach its data. Check the Firestore rules.",
+    "Naabot ang daily limit ng Firebase. Babalik ito bukas.": "Hit Firebase's daily limit. It's back tomorrow.",
+    "Mali ang email o password.": "Wrong email or password.", "Mukhang mali ang email.": "That email looks off.",
+    "Masyadong maraming subok. Maghintay muna nang kaunti.": "Too many tries. Give it a minute.",
+    "Walang internet. Kailangan ng internet sa unang login.": "No internet. The first login needs it.",
+    "May account na ang email na 'to. Mag-login na lang.": "That email already has an account. Just log in.",
+    "Masyadong maikli ang password. Gumamit ng 6 characters o higit pa.": "Password's too short. Use 6 characters or more.",
+    "Di magkapareho ang passwords. Try ulit.": "Passwords don't match. Try again.", "Ilagay muna ang email mo sa taas.": "Put your email up top first.",
+    "Kung may account ang email na 'yan, may reset link na papunta. I-check din ang spam.": "If that email has an account, a reset link is on its way. Check spam too.",
+    "Di na-send ang reset link. Try ulit.": "The reset link didn't send. Try again.", "Hindi maka-login. Subukan ulit.": "Couldn't log in. Try again.",
+    "May logs pang hindi naka-sync. Mag-sign out pa rin?": "Some logs haven't synced yet. Sign out anyway?",
+    "Walang nabago.": "Nothing changed.", "Walang nabura.": "Nothing was deleted.",
+    "Di na-restore. Kailangan ng internet. Walang nabago.": "Restore failed. Needs internet. Nothing changed.",
+    "Di na-reset. Kailangan ng internet. Walang nabura.": "Reset failed. Needs internet. Nothing was deleted.",
+    "Oras sa Internship": "Time on Internship", "1 hour na": "1 hour ago"
+  };
+  // Lines with something inside them. $1, $2… are what's inside; those pass through EN too, so "Kahapon" still becomes "Yesterday".
+  const EN_RE = [
+    [/^(\d+) mins na$/, "$1 mins ago"],
+    [/^Okay, tapos na ang side quest na (.+)\.$/, "Side quest complete: $1."],
+    [/^(.+) \+ (.+)\? Multitasker ka ah\.$/, "$1 + $2? Look at you multitasking."],
+    [/^Tapos na ang (.+)\. Nice\.$/, "$1, done. Nice."],
+    [/^Balik sa (.+)\. Tuloy ang Kasabay: (.+)\.$/, "Back to $1. Still also doing: $2."],
+    [/^(.+), noted! Kasabay ng (.+)\.$/, "$1, noted! Also doing $2."],
+    [/^Mga log today · (.+)$/, "Today's logs · $1"], [/^Mga log · (.+)$/, "Logs · $1"],
+    [/^(.+) · ngayon$/, "$1 · now"], [/^(.+) – ngayon$/, "$1 – now"],
+    [/^Kumpleto ang (.+)\. Love that for you\.$/, "$1 is all logged. Love that for you."],
+    [/^(.+)\. Anong ganap dito\?$/, "$1. What happened here?"],
+    [/^(\d+) (gaps?) na di pa naka-log$/, "$1 $2 not logged yet"],
+    [/^Main character mo that week: (.+)$/, "That week's main character: $1"],
+    [/^Main character mo this week: (.+)$/, "This week's main character: $1"],
+    [/^Over naman sa (.+)\. (.+)$/, "Way over on $1. $2"],
+    [/^(.+): kulang pa ng (.+) today\.$/, "$1: $2 to go today."],
+    [/^(.+): kulang pa ng (.+) this week\.$/, "$1: $2 to go this week."],
+    [/^(.+): kulang pa ng (.+) ngayong 7 days\.$/, "$1: $2 to go in the last 7 days."],
+    [/^Pasok lahat ng goals mo\. Ganap na ganap ka sa (.+)!$/, "All goals hit. You're on fire with $1!"],
+    [/^Pasok lahat ng goals mo\. Overachiever ka sa (.+)!$/, "All goals hit. Overachiever alert: $1!"],
+    [/^(.+) · sobra ng (.+)$/, "$1 · $2 over"],
+    [/^(\d+)% ng naka-log$/, "$1% of logged time"],
+    [/^(.+) ito\. Palitan ang category\?$/, "$1 logged. Switch the tile?"],
+    [/^(.+), running pa\.$/, "$1, still running."],
+    [/^Dapat nasa loob ng log: (.+) – (.+)\.$/, "Has to fit inside the log: $1 – $2."],
+    [/^Tanggal na ang (.+)\.$/, "$1 removed."],
+    [/^Okay, (.+) na 'to\.$/, "Okay, it's $1 now."],
+    [/^May natira pang (.+)$/, "$1 left over"],
+    [/^(.+) na (.+)\. Sakto, noted!$/, "$1 of $2. Nailed it, noted!"],
+    [/^Goods, napuno na ang (.+) na gap\.$/, "Done, $1 of gap filled."],
+    [/^Lagyan ng oras, hanggang (.+) per (day|week)\.$/, "Add hours, up to $1 per $2."],
+    [/^(.+), welcome sa tiles mo!$/, "Welcome to your tiles, $1!"],
+    [/^Kulay ng (.+)$/, "$1 color"],
+    [/^Tinanggal na tiles \((\d+)\)$/, "Removed tiles ($1)"],
+    [/^Naka-login bilang (.+)\.$/, "Signed in as $1."],
+    [/^Kailangan ng internet para dito\. (.+)$/, "This needs internet. $1"],
+    [/^May nagsi-sync pa\. Try ulit in a bit\. (.+)$/, "Still syncing. Try again in a bit. $1"],
+    [/^Backup ng (.+?): (\d+) (logs?) sa (\d+) (days?)\. Idadagdag ito.*$/, "Backup from $1: $2 $3 across $4 $5. It gets added to your current logs and nothing gets deleted. Logs you deleted after this backup come back too."],
+    [/^Goods, balik na ang logs ng (\d+) (days?)\.$/, "Done, logs for $1 $2 are back."],
+    [/^Mapapalitan nito ang (.+) na naka-log na\. Sure ka\?$/, "This replaces $1 that's already logged. Sure?"]
+  ];
+  let lang = "fil";
+  const enPart = s => EN[s] !== undefined ? EN[s] : s;
+  function tr(text) {
+    if (lang !== "en" || !text) return text;
+    const t = text.trim();
+    if (!t) return text;
+    let out = EN[t];
+    if (out === undefined) for (const [re, rep] of EN_RE) {
+      const m = re.exec(t);
+      if (m) { out = rep.replace(/\$(\d)/g, (_, i) => enPart(m[i] || "")); break; }
+    }
+    return out === undefined ? text : text.replace(t, out);
+  }
+  // Pop ups the browser draws itself go through here too.
+  const confirm = msg => window.confirm(tr(msg));
+  const LANG_ATTRS = ["placeholder", "aria-label", "title"];
+  const origText = new WeakMap(), origAttr = new WeakMap();
+  function trNode(n) {
+    if (n.nodeType === 3) {
+      const p = n.parentNode;
+      if (!p || p.nodeName === "SCRIPT" || p.nodeName === "STYLE") return;
+      const o = n.nodeValue, t = tr(o);
+      if (t !== o) { origText.set(n, o); n.nodeValue = t; }
+      return;
+    }
+    if (n.nodeType !== 1 || n.nodeName === "SCRIPT" || n.nodeName === "STYLE" || n.nodeName === "svg") return;
+    LANG_ATTRS.forEach(a => {
+      const v = n.getAttribute(a); if (!v) return;
+      const t = tr(v);
+      if (t !== v) { const saved = origAttr.get(n) || {}; saved[a] = v; origAttr.set(n, saved); n.setAttribute(a, t); }
+    });
+    n.childNodes.forEach(trNode);
+  }
+  // Anything drawn later gets swapped before the screen updates, since these run ahead of the next paint.
+  const langObs = new MutationObserver(list => list.forEach(m => {
+    if (m.type === "childList") m.addedNodes.forEach(trNode);
+    else trNode(m.target);
+  }));
+  function restoreNode(n) {
+    if (n.nodeType === 3) { if (origText.has(n)) { n.nodeValue = origText.get(n); origText.delete(n); } return; }
+    if (n.nodeType !== 1) return;
+    const saved = origAttr.get(n);
+    if (saved) { Object.entries(saved).forEach(([a, v]) => n.setAttribute(a, v)); origAttr.delete(n); }
+    n.childNodes.forEach(restoreNode);
+  }
+  function applyLang(choice) {
+    lang = choice === "en" ? "en" : "fil";
+    document.documentElement.lang = lang === "en" ? "en" : "fil";
+    document.querySelectorAll("[data-lang-pick]").forEach(b => {
+      const on = b.dataset.langPick === lang;
+      b.classList.toggle("on", on);
+      b.setAttribute("aria-pressed", on ? "true" : "false");
+    });
+    langObs.disconnect();
+    if (lang === "en") {
+      trNode(document.body);
+      langObs.observe(document.body, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: LANG_ATTRS });
+    } else restoreNode(document.body);
+  }
 
   // ---------- storage (Firestore when signed in, this browser only in guest mode) ----------
   // The web config is public by design. firestore.rules is what protects the data.
@@ -3128,6 +3339,14 @@ nav.tabs .badge { position: absolute; top: 1px; left: calc(50% + 6px); min-width
     const choice = b.dataset.themePick;
     try { localStorage.setItem("timelog-theme", choice); } catch (e) {}
     applyTheme(choice);
+  }));
+  let savedLang = "fil";
+  try { savedLang = localStorage.getItem("timelog-lang") || "fil"; } catch (e) {}
+  applyLang(savedLang);
+  document.querySelectorAll("[data-lang-pick]").forEach(b => b.addEventListener("click", () => {
+    const choice = b.dataset.langPick;
+    try { localStorage.setItem("timelog-lang", choice); } catch (e) {}
+    applyLang(choice);
   }));
   // Auto follows the device live, so the status bar color has to follow too.
   const refreshAutoAppearance = () => {
