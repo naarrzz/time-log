@@ -41,6 +41,21 @@ It opens fullscreen like a normal app, and works offline after the first load. I
 
 Time Log now sits on your home screen. Open it from there from now on.
 
+## Android app (test build)
+
+**[Download the APK](https://github.com/naarrzz/time-log-android/releases/latest/download/TimeLog-debug.apk)** · Source: [naarrzz/time-log-android](https://github.com/naarrzz/time-log-android)
+
+A small Android app around this same web app, with the same account and logs. It adds a live notification with the running timer and Stop (a Live Update chip on Android 16), a home screen widget with tile shortcuts, and reminders for a tile left running over 4 hours and gaps left at 9 PM. Android 8.0 and up.
+
+It isn't on the Play Store, so you install it yourself:
+
+1. Download the APK on your phone and open it.
+2. Android asks to allow installs from that app (Chrome or Files): allow it once.
+3. Install, open Time Log, allow notifications, and sign in.
+4. Long-press your home screen, tap Widgets, then Time Log, to add the widget.
+
+It's an early test build: the notification and widget start working once this web app's Android support is live.
+
 ## Older versions
 
 Updates reach the main link automatically, including on your home screen. To stay on an older version, open its link and add that to your home screen. It uses the same account and logs.
