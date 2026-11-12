@@ -11,7 +11,8 @@
 <meta name="apple-mobile-web-app-title" content="Time Log">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#121513">
-<script>try { const th = localStorage.getItem("timelog-theme"); if (th && th !== "auto") document.documentElement.dataset.theme = th; } catch (e) {}</script>
+<script>try { const th = localStorage.getItem("timelog-theme"); if (th && th !== "auto") document.documentElement.dataset.theme = th; } catch (e) {}
+if (/Android/i.test(navigator.userAgent)) document.documentElement.classList.add("android");</script>
 <style>
 /* Layout: one-thumb phone app. Live card on top, tap tiles below, tabs at the bottom.
    Look: iOS grouped screens. Device font, gray page, plain white cards, gray-filled controls, and color only for categories. */
@@ -91,9 +92,13 @@ header.top .date { color: var(--ink-soft); font-size: 13px; font-weight: 600; }
   font: 600 15px/1.15 var(--body); position: relative; overflow: hidden; transition: transform .16s ease, box-shadow .16s ease;
 }
 .tile:active { transform: scale(.96); }
-.tile .d { font-size: 12px; font-weight: 500; font-variant-numeric: tabular-nums; opacity: .85; position: relative; z-index: 1; }
+/* Today's time sits in the top-right corner like a badge, so the name always owns the bottom-left. */
+.tile .d { align-self: flex-end; margin-bottom: auto; font-size: 12px; font-weight: 500; font-variant-numeric: tabular-nums; opacity: .85; position: relative; z-index: 1; }
 .tile .d:empty { display: none; }
-.tile .t { overflow-wrap: break-word; hyphens: none; position: relative; z-index: 1; }
+.tile .t { margin-top: auto; overflow-wrap: break-word; hyphens: none; position: relative; z-index: 1; }
+.tile .t.fit { overflow-wrap: normal; }
+/* Roboto runs wider than SF, so Android gets a slightly smaller name. */
+.android .tile { font-size: 13.5px; }
 .tile.on { transform: translateY(-2px); outline: 2.5px solid var(--ink); outline-offset: 2px; box-shadow: 0 8px 16px -8px var(--tile, var(--c)); }
 .tile.on:active { transform: translateY(-1px) scale(.98); }
 .ripple { position: absolute; border-radius: 50%; background: currentColor; opacity: .22; transform: scale(0); pointer-events: none; animation: ripple .45s ease-out forwards; }
@@ -1694,6 +1699,18 @@ nav.tabs .badge { position: absolute; top: 1px; left: calc(50% + 6px); min-width
     b.addEventListener("click", onClick);
     return b;
   }
+  // A word too long for its tile ("Certifications" on a narrow phone) shrinks a little instead of breaking
+  // mid-word; only if it still doesn't fit at 12px does it break. Rechecked when the grid is resized or shown.
+  function fitTiles(el) {
+    if (!el.clientWidth) return;
+    el.querySelectorAll(".tile .t").forEach(t => {
+      t.style.fontSize = ""; t.classList.add("fit");
+      let size = parseFloat(getComputedStyle(t).fontSize);
+      while (t.scrollWidth > t.clientWidth + 1 && size > 12) { size -= 0.5; t.style.fontSize = size + "px"; }
+      if (t.scrollWidth > t.clientWidth + 1) t.classList.remove("fit");
+    });
+  }
+  if (window.ResizeObserver) new ResizeObserver(() => fitTiles($("tiles"))).observe($("tiles"));
   // Render runs every minute and on every sync. Tiles are only rebuilt when the tiles themselves change.
   let tilesSig = "";
   function drawTiles() {
@@ -1709,6 +1726,7 @@ nav.tabs .badge { position: absolute; top: 1px; left: calc(50% + 6px); min-width
       add.addEventListener("click", openNewTile);
       el.appendChild(add);
       tilesSig = sig;
+      fitTiles(el);
     }
     const today = totals(sessionsFor(keyOf(Date.now()), true));
     el.querySelectorAll(".tile").forEach(b => {
