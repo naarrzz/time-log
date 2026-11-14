@@ -1,5 +1,10 @@
 # Time Log
 
+<p>
+  <a href="https://github.com/naarrzz/time-log-android/releases/latest/download/TimeLog.apk"><img src="https://img.shields.io/badge/Download%20TimeLog.apk-0071E3?style=for-the-badge&logo=android&logoColor=white" alt="Download TimeLog.apk for Android"></a>
+  <a href="https://naarrzz.github.io/time-log/"><img src="https://img.shields.io/badge/iOS%20%2F%20Web-111111?style=for-the-badge&logo=apple&logoColor=white" alt="Open on iOS or the web"></a>
+</p>
+
 **Live demo:** https://naarrzz.github.io/time-log/
 
 - **No account:** your logs are saved only in that browser on that device. They stay when you refresh or close the browser, but you can lose them if you clear your browsing data, use a private tab, remove the browser or home screen app, or don't open the app for a while in Safari.
