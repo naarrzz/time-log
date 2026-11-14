@@ -3,6 +3,7 @@
 <p>
   <a href="https://github.com/naarrzz/time-log-android/releases/latest/download/TimeLog.apk"><img src="https://img.shields.io/badge/Download%20TimeLog.apk-0071E3?style=for-the-badge&logo=android&logoColor=white" alt="Download TimeLog.apk for Android"></a>
   <a href="https://naarrzz.github.io/time-log/"><img src="https://img.shields.io/badge/iOS%20%2F%20Web-111111?style=for-the-badge&logo=apple&logoColor=white" alt="Open on iOS or the web"></a>
+  <a href="#add-it-to-your-iphone-home-screen"><img src="https://img.shields.io/badge/Add%20to%20Home%20Screen-555555?style=for-the-badge&logo=apple&logoColor=white" alt="How to add Time Log to your iPhone home screen like an app"></a>
 </p>
 
 **Live demo:** https://naarrzz.github.io/time-log/
