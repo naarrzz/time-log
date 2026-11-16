@@ -1673,6 +1673,33 @@ nav.tabs .badge { position: absolute; top: 1px; left: calc(50% + 6px); min-width
     // A skip is for that exact gap. Editing a log next to it changes the gap, so it shows again.
     return gaps.filter(g => !skipped.has(skipKey(key, g)));
   }
+  // Skips are kept on this device, so a skipped gap from an older day doesn't come back after a reload.
+  try { (JSON.parse(localStorage.getItem("timelog-skipped")) || []).forEach(k => skipped.add(k)); } catch (e) {}
+  function saveSkipped() {
+    const oldest = shiftDay(keyOf(Date.now()), -14);
+    [...skipped].forEach(k => { if (k.slice(0, 10) < oldest) skipped.delete(k); });
+    try { localStorage.setItem("timelog-skipped", JSON.stringify([...skipped])); } catch (e) {}
+  }
+  // Days in the last week that still have gaps, newest first. Only days with something logged count,
+  // so a day you never opened the app isn't one big gap.
+  function pendingGapDays() {
+    const today = keyOf(Date.now()), out = [];
+    for (let i = 0; i < 7; i++) {
+      const k = shiftDay(today, -i);
+      if (i && !dayReady(k)) continue;
+      if (i && !(days[k] || []).length) continue;
+      const n = gapsFor(k).length;
+      if (n) out.push({ key: k, n });
+    }
+    return out;
+  }
+  // Opening Gaps with today all done goes straight to the newest older day that still has some.
+  function gapsJump() {
+    const today = keyOf(Date.now()), cur = gapDay && gapDay < today ? gapDay : today;
+    if (gapsFor(cur).length) return;
+    const next = pendingGapDays()[0];
+    if (next) gapDay = next.key < today ? next.key : null;
+  }
 
   // ---------- render ----------
   // A tile's fill and text. Light colors get black text. The rest get white, darkened just enough to stay readable.
@@ -1906,7 +1933,7 @@ nav.tabs .badge { position: absolute; top: 1px; left: calc(50% + 6px); min-width
     const now = Date.now();
     const today = keyOf(now), key = gapDay && gapDay < today ? gapDay : today;
     const ready = dayReady(key), gaps = ready ? gapsFor(key) : [];
-    const badgeN = gapsFor(today).length;
+    const badgeN = pendingGapDays().reduce((a, d) => a + d.n, 0);
     $("gap-badge").hidden = !badgeN; $("gap-badge").textContent = badgeN;
     $("gap-title").textContent = dayName(key);
     $("gap-next").disabled = key === today;
@@ -1927,7 +1954,7 @@ nav.tabs .badge { position: absolute; top: 1px; left: calc(50% + 6px); min-width
       title: fmtTime(g.start) + " – " + fmtTime(g.end),
       gap: { end: g.end, before: null, filled: 0 }
     }), false)));
-    $("gap-skip").onclick = () => { skipped.add(skipKey(key, g)); renderGaps(); };
+    $("gap-skip").onclick = () => { skipped.add(skipKey(key, g)); saveSkipped(); gapsJump(); renderGaps(); };
   }
   // One plain sentence on top of Week, then progress for each goal.
   const OVER_QUOTES = ["Baka mapano ka niyan.", "Hinay-hinay lang, bes.", "Pahinga rin pag may time.", "Sige ka, ikaw rin."];
@@ -3031,6 +3058,7 @@ nav.tabs .badge { position: absolute; top: 1px; left: calc(50% + 6px); min-width
       document.querySelector("nav.tabs .in").style.setProperty("--i", i);
       playOnce($("tab-glass"), "squish");
     }
+    if (k === "gaps" && $("view-gaps").hidden) { gapsJump(); renderGaps(); }
     if (k === "week" && $("view-week").hidden) {
       $("view-week").classList.add("sweep");
       clearTimeout(sweepTimer);
@@ -3571,7 +3599,7 @@ nav.tabs .badge { position: absolute; top: 1px; left: calc(50% + 6px); min-width
       }
     }
     [days, kasDays, dayState].forEach(o => Object.keys(o).forEach(k => { delete o[k]; }));
-    current = null; lastSwitch = null; viewDay = null; gapDay = null; skipped.clear();
+    current = null; lastSwitch = null; viewDay = null; gapDay = null; skipped.clear(); saveSkipped();
     firstDay = ""; weekOff = 0;
     saveCurrent();
     // An account with no logs and no saved tiles looks brand new, and would get the quiz on the next open.
