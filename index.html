@@ -1960,6 +1960,8 @@ nav.tabs .badge { position: absolute; top: 1px; left: calc(50% + 6px); min-width
   const OVER_QUOTES = ["Baka mapano ka niyan.", "Hinay-hinay lang, bes.", "Pahinga rin pag may time.", "Sige ka, ikaw rin."];
   // A per-day goal you only need to hit some days of the week, like Gym 1.5h, 5x a week.
   const isTimes = g => g.per === "day" && g.kind !== "limit" && g.times >= 1 && g.times <= 6;
+  // For those, a day counts as one time once it reaches half the hours, so a short gym day still counts.
+  const HIT_SHARE = .5;
   function drawInsight(all, allMs, keys) {
     const card = $("week-insight");
     const top = Object.entries(all).filter(([id]) => id !== "tulog").sort((a, b) => b[1] - a[1])[0];
@@ -1973,7 +1975,8 @@ nav.tabs .badge { position: absolute; top: 1px; left: calc(50% + 6px); min-width
     const span = sundayWeeks() ? "this week" : "7 days";
     const dayTotals = keys.slice().reverse().map(key => totals(sessionsFor(key, true)));   // [0] is today
     const todayTotals = dayTotals[0];
-    const daysHit = g => dayTotals.filter(t => (t[g.cat] || 0) >= g.hours * HOUR).length;
+    const hitDays = g => dayTotals.slice().reverse().map(t => t[g.cat] || 0).filter(ms => ms >= g.hours * HOUR * HIT_SHARE);   // oldest first
+    const daysHit = g => hitDays(g).length;
     // A times goal counts in whole days: each day hit is worth one day's hours, so the checks below work the same.
     const doneMs = g => isTimes(g) ? daysHit(g) * g.hours * HOUR : g.per === "day" ? (todayTotals[g.cat] || 0) : (all[g.cat] || 0);
     const targetMs = g => g.hours * HOUR * (isTimes(g) ? g.times : 1);
@@ -2004,7 +2007,7 @@ nav.tabs .badge { position: absolute; top: 1px; left: calc(50% + 6px); min-width
     shown.forEach(g => {
       const ms = doneMs(g), c = CAT[g.cat];
       const row = document.createElement("div"); row.className = "goal-row";
-      if (isTimes(g)) { row.append(...timesRow(g, daysHit(g), todayTotals[g.cat] || 0)); el.appendChild(row); return; }
+      if (isTimes(g)) { row.append(...timesRow(g, hitDays(g), todayTotals[g.cat] || 0)); el.appendChild(row); return; }
       const head = document.createElement("div"); head.className = "goal-top";
       const n = document.createElement("span"); n.textContent = c.name;
       const v = document.createElement("span"); v.className = "v"; v.textContent = fmtHrs(ms) + " / " + g.hours + "h " + (g.kind === "limit" ? "max " : "") + (g.per === "day" ? "today" : "· " + span) + (ms - g.hours * HOUR >= MIN ? " · sobra ng " + fmtDur(ms - g.hours * HOUR) : "");
@@ -2017,9 +2020,11 @@ nav.tabs .badge { position: absolute; top: 1px; left: calc(50% + 6px); min-width
       el.appendChild(row);
     });
   }
-  // One piece per time: full for each day hit, and today's progress in the next one.
-  function timesRow(g, hit, todayMs) {
-    const c = CAT[g.cat], dayMs = g.hours * HOUR;
+  // One piece per time. A day that counts fills its piece as far as it got (1h of a 2h goal is half),
+  // and today, until it counts, shows its progress in the next piece.
+  function timesRow(g, hitMs, todayMs) {
+    const c = CAT[g.cat], dayMs = g.hours * HOUR, hit = hitMs.length;
+    const todayIn = todayMs >= dayMs * HIT_SHARE;   // today already counts, so it's one of hitMs
     const head = document.createElement("div"); head.className = "goal-top";
     const n = document.createElement("span"); n.textContent = c.name;
     const v = document.createElement("span"); v.className = "v"; v.textContent = hit + " / " + g.times + "x · today " + fmtHrs(todayMs) + " / " + g.hours + "h";
@@ -2028,7 +2033,7 @@ nav.tabs .badge { position: absolute; top: 1px; left: calc(50% + 6px); min-width
     for (let i = 0; i < g.times; i++) {
       const track = document.createElement("div"); track.className = "goal-track";
       const fill = document.createElement("div"); fill.className = "goal-fill"; fill.style.background = c.c;
-      fill.style.width = (i < hit ? 100 : i === hit && todayMs < dayMs ? todayMs / dayMs * 100 : 0) + "%";   // a day already hit is counted in hit
+      fill.style.width = (i < hit ? Math.min(1, hitMs[i] / dayMs) * 100 : i === hit && !todayIn ? todayMs / dayMs * 100 : 0) + "%";
       // The sweep crosses the pieces one after another, in the same .45s as a full bar.
       fill.style.animationDuration = (.45 / g.times) + "s";
       fill.style.animationDelay = (.45 / g.times * i) + "s";
@@ -3194,13 +3199,31 @@ nav.tabs .badge { position: absolute; top: 1px; left: calc(50% + 6px); min-width
     nativePost({
       running: c ? { id: current.cat, name: c.name, color: c.c, start: tripStart(), logStart: current.start, sub: current.sub || null } : null,
       tiles: shownCats().map(x => ({ id: x.id, name: x.name, color: x.c })),
-      top: mostUsedTiles(),
+      top: nextTiles(),
       today: Object.entries(totals(sessionsFor(today, false))).map(([id, ms]) => { const x = CAT[id] || { name: id, c: "#999999" }; return { id, name: x.name, color: x.c, ms }; }),
       gaps: gapsFor(today).length,
       day: today
     });
   }
   // The widget's default shortcuts: the tiles with the most time in the last 7 days.
+  // The widget's shortcuts: what you usually do right after the tile that's running (or the last one you logged),
+  // from the last 4 weeks, then the most used tiles to fill the rest.
+  function nextTiles() {
+    const now = Date.now(), list = [];
+    for (let i = 27; i >= 0; i--) list.push(...sessionsFor(keyOf(now - i * DAY), true));
+    const from = current ? current.cat : list.length ? list[list.length - 1].cat : null;
+    const n = {};
+    // Each time the tile ends and a different one starts within 30 minutes. Back-to-back pieces of one tile
+    // (like a log split at midnight) are one run, so they count once.
+    if (from) for (let i = 0; i < list.length - 1; i++) {
+      const a = list[i], b = list[i + 1];
+      if (a.cat === from && b.cat !== from && b.start - a.end <= 30 * MIN) n[b.cat] = (n[b.cat] || 0) + 1;
+    }
+    const ids = new Set(shownCats().map(c => c.id));
+    const next = Object.keys(n).filter(id => ids.has(id)).sort((a, b) => n[b] - n[a]);
+    const rest = mostUsedTiles().filter(id => id !== from && !next.includes(id));
+    return [...next, ...rest];
+  }
   function mostUsedTiles() {
     const t = {}, now = Date.now();
     for (let i = 0; i < 7; i++) sessionsFor(keyOf(now - i * DAY), true).forEach(x => { t[x.cat] = (t[x.cat] || 0) + (x.end - x.start); });
