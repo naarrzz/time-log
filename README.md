@@ -20,7 +20,9 @@ A one-tap personal time audit app, built to see where my hours actually go betwe
 
 - **Sync and offline**: signed-in logs sync through Cloud Firestore in real time and keep working with no internet.
 - **Sub-labels**: say what exactly you did in a tile, like Jeep under Biyahe. Optional, and Week shows the breakdown.
-- **Backup and restore**: download every log as a JSON file, and add it back any time.
+- **Backup and restore**: download every log as a JSON file. Restore lets you pick a day from a backup file, or from History, and see its logs before you add what's missing or go back to that version (with Undo).
+- **History**: every device keeps a copy of a day each time you change it (one per 10 minutes), labeled with the time, the device and the app version.
+- **Safe offline sync**: a save sends only the logs that changed, so a phone that was offline can't wipe what another device logged meanwhile.
 - **Themes**: Auto, Light, Dim and Dark, saved per device.
 
 Single-file HTML/CSS/JS with no build step, plus a small service worker so the home screen app opens offline. `firestore.rules` limits each account to its own logs, which is why the Firebase web config can sit in public code.

@@ -290,6 +290,7 @@ nav.tabs .badge { position: absolute; top: 1px; left: calc(50% + 6px); min-width
 .btn.tag[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
 .btn.tag:not(.plain)[aria-pressed="true"]::before { content: ""; display: inline-block; width: 7px; height: 7px; margin-right: 6px; border-radius: 50%; background: currentColor; vertical-align: 1px; animation: pulse 1.6s ease-in-out infinite; }
 .btn.tag.pop { animation: pop .22s ease-out; }
+.rs-new { color: var(--accent); font-weight: 600; }
 .sub-h { font-size: 13px; color: var(--ink-soft); margin: 14px 0 0; font-weight: 400; text-transform: uppercase; letter-spacing: .02em; }
 .link-btn { appearance: none; border: 0; background: none; color: var(--accent); font: 400 15px var(--body); padding: 6px; cursor: pointer; }
 /* Login */
@@ -620,7 +621,7 @@ nav.tabs .badge { position: absolute; top: 1px; left: calc(50% + 6px); min-width
       </div>
     </div>
   </section>
-  <p class="credit">v0.6.0 · by Narz Angelo Alcaide</p>
+  <p class="credit">v0.7.0 · by Narz Angelo Alcaide</p>
 </div>
 
 <div class="toast" id="toast" role="status" aria-live="polite">
@@ -708,6 +709,43 @@ nav.tabs .badge { position: absolute; top: 1px; left: calc(50% + 6px); min-width
       <button class="btn" id="cats-add">+ Add tile</button>
       <button class="btn" id="cats-cancel">Cancel</button>
       <button class="btn primary" id="cats-save">Save</button>
+    </div>
+  </div>
+</div>
+
+<div class="sheet-wrap" id="rs-wrap">
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="rs-title">
+    <h3 id="rs-title">Ibalik ang logs</h3>
+    <div class="seg" id="rs-src" role="group" aria-label="Saan galing" style="align-self:flex-start">
+      <button data-src="hist" type="button">History</button>
+      <button data-src="file" type="button">File</button>
+    </div>
+    <div id="rs-hist">
+      <div class="day-nav">
+        <button class="btn" id="rs-prev" type="button" aria-label="Nakaraang araw">‹</button>
+        <h2 id="rs-day"></h2>
+        <button class="btn" id="rs-next" type="button" aria-label="Susunod na araw">›</button>
+      </div>
+      <p class="empty" id="rs-hist-note" style="margin-top:10px">Bawat device, may kopya ng araw tuwing may binago ka, isa kada 10 minuto. Pumili ng version para makita ang laman nito.</p>
+      <div class="rows" id="rs-hist-list"></div>
+    </div>
+    <div id="rs-file" hidden>
+      <div class="chips"><button class="btn" id="rs-pick" type="button">Pumili ng backup file</button></div>
+      <p class="empty" id="rs-file-info" style="margin-top:10px">Backup file na galing sa Backup button, kahit galing sa ibang device.</p>
+      <div class="rows" id="rs-file-list"></div>
+      <div class="chips" id="rs-file-all-row" style="margin-top:12px" hidden><button class="btn" id="rs-file-all" type="button">Idagdag lahat</button></div>
+    </div>
+    <div id="rs-preview" hidden>
+      <h2 id="rs-pv-title" style="margin:0"></h2>
+      <p class="empty" id="rs-pv-sub" style="margin-top:4px"></p>
+      <div class="rows" id="rs-pv-list"></div>
+    </div>
+    <p class="sync warn" id="rs-err" role="alert" style="margin:0" hidden></p>
+    <div class="chips">
+      <button class="btn" id="rs-back" type="button" hidden>‹ Balik</button>
+      <button class="btn" id="rs-add" type="button" hidden>Idagdag ang kulang</button>
+      <button class="btn primary" id="rs-replace" type="button" hidden>Ibalik sa version na 'to</button>
+      <button class="btn primary" id="rs-close" type="button">Done</button>
     </div>
   </div>
 </div>
@@ -900,6 +938,17 @@ nav.tabs .badge { position: absolute; top: 1px; left: calc(50% + 6px); min-width
     "Ngayon": "Now", "Kahapon": "Yesterday", "ngayon": "now", "Sandali": "Hang on",
     "So, anong ganap?": "So, whatcha doin'?", "Wala kang ganap?": "Nothing going on?", "Tap ka lang sa baba": "Tap a tile below",
     "Stop na": "Stop", "Palitan ang start": "Change start", "Delete log": "Delete log", "Iba pa": "More",
+    // restore sheet
+    "Ibalik ang logs": "Bring back logs", "Saan galing": "Source", "Sandali…": "Hang on…",
+    "Bawat device, may kopya ng araw tuwing may binago ka, isa kada 10 minuto. Pumili ng version para makita ang laman nito.": "Every device keeps a copy of the day whenever you change it, one every 10 minutes. Pick a version to see what's in it.",
+    "Pumili ng backup file": "Choose a backup file", "Backup file na galing sa Backup button, kahit galing sa ibang device.": "A file from the Backup button, even one made on another device.",
+    "Idagdag lahat": "Add everything", "‹ Balik": "‹ Back", "Idagdag ang kulang": "Add what's missing", "Ibalik sa version na 'to": "Go back to this version",
+    "Para sa naka-login lang ang history. Pwede pa rin ang File.": "History is for signed-in accounts. File still works.",
+    "Ito ang nasa app ngayon": "What the app has right now", "Wala pang history sa araw na 'to": "No history for this day yet",
+    "Nagsisimula ito sa v0.7.0": "It starts with v0.7.0", "lumang version": "older version", "Ibang device": "Another device",
+    "Di ma-load ang history. Kailangan ng internet.": "Couldn't load the history. Needs internet.",
+    "Kumpleto ang lahat ngayon": "Everything's already here", "wala ngayon": "missing now", "Walang logs sa version na 'to": "No logs in this version",
+    "Papalitan nito ang logs ng araw na 'to ng laman ng version na 'to. May Undo pagkatapos.": "This swaps the day's logs for this version. You can Undo right after.",
     "Kasabay": "Multitasking", "Kasabay ng:": "Also doing:", "+ Kasabay": "+ Multitask", "+ Add Kasabay": "+ Add multitask",
     "Mga log today": "Today's logs", "Anong ganap dito?": "What happened here?", "Walang gaps": "No gaps",
     "Kumpleto today. Ang sipag, infairness.": "All caught up today. Look at you go.",
@@ -997,6 +1046,14 @@ nav.tabs .badge { position: absolute; top: 1px; left: calc(50% + 6px); min-width
   };
   // Lines with something inside them. $1, $2… are what's inside; those pass through EN too, so "Kahapon" still becomes "Yesterday".
   const EN_RE = [
+    [/^(.+) sa (iPhone|iPad|Mac|Android|Windows|Linux)$/, "$1 on $2"],
+    [/^(\d+) ang wala ngayon$/, "$1 missing now"],
+    [/^Backup file ng (.+)$/, "Backup file from $1"],
+    [/^Version ng (.+)$/, "Version from $1"],
+    [/^Backup ng ([A-Z][a-z]{2} \d+, \d+:\d\d [AP]M)$/, "Backup from $1"],
+    [/^Goods, naibalik na ang (.+)\.$/, "Done, $1 is back."],
+    [/^Goods, nadagdag na sa (.+)\.$/, "Done, added to $1."],
+    [/^(\d+) Kasabay$/, "$1 multitasking"],
     [/^(\d+) mins na$/, "$1 mins ago"],
     [/^Okay, tapos na ang side quest na (.+)\.$/, "Side quest complete: $1."],
     [/^(.+) \+ (.+)\? Multitasker ka ah\.$/, "$1 + $2? Look at you multitasking."],
@@ -1124,19 +1181,83 @@ nav.tabs .badge { position: absolute; top: 1px; left: calc(50% + 6px); min-width
   const wroteBy = {};            // days this version has saved, as far as this device has seen
   try { const k = localStorage.getItem("timelog-wrote"); if (k) wroteBy[k] = true; } catch (e) {}
   let oldVersionSeen = false, oldVersionDays = [];   // days an older version rewrote, which the fix button marks again
-  function saveDay(key) {
+  // What each day looked like on the server (or after our own last save), so a save can send only what changed.
+  const base = {};
+  // Same log, same key, whatever order its fields come in. Undefined fields aren't stored, so they don't count.
+  const canon = x => JSON.stringify(x, Object.keys(x).filter(k => x[k] !== undefined).sort());
+  const plainCopy = x => JSON.parse(JSON.stringify(x));
+  function setDayFromServer(key, b) {
+    const byStart = (a, c) => a.start - c.start;
+    days[key] = (b.sessions || []).slice().sort(byStart);
+    kasDays[key] = (b.kasabay || []).slice().sort(byStart);
+    base[key] = plainCopy({ sessions: days[key], kasabay: kasDays[key] });
+  }
+  function diffLogs(was, now) {
+    const wasSet = new Set(was.map(canon)), nowSet = new Set(now.map(canon));
+    return { add: now.filter(x => !wasSet.has(canon(x))), remove: was.filter(x => !nowSet.has(canon(x))) };
+  }
+  function saveDay(key, opts) {
     const sessions = mergeAdjacent(days[key] || []);
     const kasabay = mergeAdjacent(kasDays[key] || []);
     days[key] = sessions;
     kasDays[key] = kasabay;
     if (mode !== "db") { localSave(); return Promise.resolve(); }
+    // Only the logs that changed go to the server, as "add these" and "remove those". The server applies them on top
+    // of whatever the day holds by then, so a device that was offline can't wipe logs another device added meanwhile.
     // Firestore applies this to its on-device cache right away and syncs in order once online.
     // Don't chain writes on these promises: they only resolve after the server answers.
+    const was = base[key] || { sessions: [], kasabay: [] };
+    const s = diffLogs(was.sessions, sessions), k = diffLogs(was.kasabay, kasabay);
+    const changed = s.add.length || s.remove.length || k.add.length || k.remove.length;
+    if (!changed && !(opts && opts.mark)) return Promise.resolve();
     // "by" marks this version's writes. Older versions save without it, which is how we can tell they touched a day.
     try { localStorage.setItem("timelog-wrote", key); } catch (e) {}
     wroteBy[key] = true;
-    return db.doc(root + "/days/" + key).set({ date: key, sessions, kasabay, by: "main" }).catch(onWriteError);
+    const FV = firebase.firestore.FieldValue, ref = db.doc(root + "/days/" + key), batch = db.batch();
+    batch.set(ref, { date: key, by: "main", sessions: FV.arrayUnion(...plainCopy(s.add)), kasabay: FV.arrayUnion(...plainCopy(k.add)) }, { merge: true });
+    const gone = {};
+    if (s.remove.length) gone.sessions = FV.arrayRemove(...s.remove);
+    if (k.remove.length) gone.kasabay = FV.arrayRemove(...k.remove);
+    if (Object.keys(gone).length) batch.update(ref, gone);
+    base[key] = plainCopy({ sessions, kasabay });
+    if (changed) addHistory(batch, key, sessions, kasabay);
+    return batch.commit().catch(onWriteError);
   }
+
+  // ---------- history: each device keeps a copy of a day after it changes it, at most one per 10 minutes ----------
+  const APP_VERSION = "v0.7.0";
+  function deviceName() {
+    const ua = navigator.userAgent;
+    if (window.TimeLogAndroid) return "Android app";
+    if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.timelog) return /Macintosh/.test(ua) ? "Mac app" : /iPad/.test(ua) ? "iPad app" : "iPhone app";
+    const os = /iPhone/.test(ua) ? "iPhone" : /iPad/.test(ua) ? "iPad" : /Android/.test(ua) ? "Android" : /Macintosh/.test(ua) ? "Mac" : /Windows/.test(ua) ? "Windows" : "Linux";
+    const br = /Edg\//.test(ua) ? "Edge" : /Firefox\/|FxiOS/.test(ua) ? "Firefox" : /Chrome\/|CriOS/.test(ua) ? "Chrome" : /Safari\//.test(ua) ? "Safari" : "Browser";
+    return br + " / " + os;
+  }
+  const DEVICE = (() => {
+    let d = null;
+    try { d = JSON.parse(localStorage.getItem("timelog-device")); } catch (e) {}
+    if (!d || typeof d.id !== "string") d = { id: Math.random().toString(36).slice(2) + Date.now().toString(36) };
+    d.name = deviceName();
+    try { localStorage.setItem("timelog-device", JSON.stringify(d)); } catch (e) {}
+    return d;
+  })();
+  const HIST_EVERY = 10 * 60 * 1000;
+  function addHistory(batch, key, sessions, kasabay) {
+    let last = {};
+    try { last = JSON.parse(localStorage.getItem("timelog-hist")) || {}; } catch (e) {}
+    const now = Date.now(), prev = last[key];
+    // Within 10 minutes of when this device started its last copy of the day: update that copy, don't add one.
+    const reuse = prev && prev.u === root && now - prev.first < HIST_EVERY;
+    const id = reuse ? prev.id : DEVICE.id + "-" + now.toString(36);
+    batch.set(db.doc(root + "/days/" + key + "/history/" + id),
+      { at: now, device: DEVICE.id, deviceName: DEVICE.name, app: APP_VERSION, sessions: plainCopy(sessions), kasabay: plainCopy(kasabay) });
+    last[key] = { id, first: reuse ? prev.first : now, u: root };
+    Object.keys(last).forEach(k => { if (now - last[k].first > HIST_EVERY) delete last[k]; });
+    try { localStorage.setItem("timelog-hist", JSON.stringify(last)); } catch (e) {}
+  }
+  // "Safari / iPhone" reads as "Safari sa iPhone" (English swaps it to "Safari on iPhone").
+  const showDevice = name => name ? name.replace(" / ", " sa ") : "Ibang device";
   function saveCurrent() {
     if (mode !== "db") { localSave(); return Promise.resolve(); }
     const body = current ? { active: true, cat: current.cat, start: current.start, kas: current.kas || [], sub: current.sub || null } : { active: false };
@@ -1806,7 +1927,7 @@ nav.tabs .badge { position: absolute; top: 1px; left: calc(50% + 6px); min-width
     dayState[key] = "loading";
     db.doc(root + "/days/" + key).get().then(s => {
       const b = s.exists ? s.data() : null;
-      if (b) { days[key] = (b.sessions || []).slice(); kasDays[key] = (b.kasabay || []).slice(); }
+      if (b) setDayFromServer(key, b);
       dayState[key] = "done"; render();
     }).catch(() => { delete dayState[key]; setSync("Di ma-load ang araw na 'yan. Kailangan ng internet.", true); });
     return false;
@@ -3314,7 +3435,7 @@ nav.tabs .badge { position: absolute; top: 1px; left: calc(50% + 6px); min-width
       // Once the old tabs are closed, this saves them now. If one is still open, the warning comes back.
       const fix = document.createElement("button");
       fix.className = "btn sync-fix"; fix.type = "button"; fix.textContent = "Sarado na, ayusin";
-      fix.addEventListener("click", () => { oldVersionDays.forEach(k => { if (days[k]) saveDay(k); }); });
+      fix.addEventListener("click", () => { oldVersionDays.forEach(k => { if (days[k]) saveDay(k, { mark: true }); }); });
       $("sync").append(" ", fix);
       return;
     }
@@ -3341,13 +3462,13 @@ nav.tabs .badge { position: absolute; top: 1px; left: calc(50% + 6px); min-width
       oldVersionSeen = false; oldVersionDays = [];
       snap.docs.forEach(d => {
         const b = d.data();
-        if (b && Array.isArray(b.sessions)) { days[d.id] = b.sessions.slice(); kasDays[d.id] = (b.kasabay || []).slice(); }
+        if (b && Array.isArray(b.sessions)) setDayFromServer(d.id, b);
         // We saved this day, and now it's missing our mark: something older rewrote it.
         // The next save puts the mark back, so this clears itself unless the old version is still at it.
         if (b && !b.by && wroteBy[d.id]) { oldVersionSeen = true; oldVersionDays.push(d.id); }
         if (b && b.by) wroteBy[d.id] = true;
       });
-      snap.docChanges().forEach(ch => { if (ch.type === "removed") { delete days[ch.doc.id]; delete kasDays[ch.doc.id]; } });
+      snap.docChanges().forEach(ch => { if (ch.type === "removed") { delete days[ch.doc.id]; delete kasDays[ch.doc.id]; delete base[ch.doc.id]; } });
       if (!snap.metadata.fromCache) snap.docs.forEach(d => { if (normalizeDay(d.id)) saveDay(d.id); });
       syncMeta.days = snap.metadata; showSync();
       render();
@@ -3492,7 +3613,7 @@ nav.tabs .badge { position: absolute; top: 1px; left: calc(50% + 6px); min-width
     } else {
       Object.keys(days).forEach(k => { all[k] = { sessions: days[k], kasabay: kasDays[k] || [] }; });
     }
-    const text = JSON.stringify({ exportedAt: new Date().toISOString(), categories: CATS, goals, schedules, current, days: all }, null, 2);
+    const text = JSON.stringify({ exportedAt: new Date().toISOString(), device: DEVICE.name, app: APP_VERSION, categories: CATS, goals, schedules, current, days: all }, null, 2);
     const name = "time-log-backup-" + keyOf(Date.now()) + ".json";
     const file = new File([text], name, { type: "application/json" });
     if (navigator.canShare && navigator.canShare({ files: [file] })) {
@@ -3538,6 +3659,7 @@ nav.tabs .badge { position: absolute; top: 1px; left: calc(50% + 6px); min-width
     const list = (v, ok) => (Array.isArray(v) ? v : []).filter(x => x && typeof x.id === "string" && ok(x));
     return {
       taken, days, logs,
+      device: typeof o.device === "string" ? o.device : "", app: typeof o.app === "string" ? o.app : "",
       cats: list(o.categories, c => typeof c.name === "string" && c.name).map(c => {
         const t = { id: c.id, name: c.name, c: /^#[0-9a-f]{3,8}$/i.test(c.c) ? c.c : "#999999" };
         if (c.hidden) t.hidden = true;
@@ -3555,7 +3677,7 @@ nav.tabs .badge { position: absolute; top: 1px; left: calc(50% + 6px); min-width
       const snap = await db.collection(root + "/days").get({ source: "server" });
       snap.forEach(d => {
         const x = d.data();
-        if (x && Array.isArray(x.sessions)) { days[d.id] = x.sessions.slice(); kasDays[d.id] = (x.kasabay || []).slice(); dayState[d.id] = "done"; }
+        if (x && Array.isArray(x.sessions)) { setDayFromServer(d.id, x); dayState[d.id] = "done"; }
       });
     }
     const shape = key => JSON.stringify([days[key] || [], kasDays[key] || []].map(l => mergeAdjacent(l).map(x => [x.cat, x.sub || "", x.start, x.end])));
@@ -3579,19 +3701,194 @@ nav.tabs .badge { position: absolute; top: 1px; left: calc(50% + 6px); min-width
   }
   let restoring = null;
   const closeRestore = () => { $("restore-wrap").classList.remove("show"); restoring = null; };
-  $("restore-btn").addEventListener("click", () => $("restore-file").click());
-  $("restore-file").addEventListener("change", async e => {
-    const file = e.target.files[0];
-    e.target.value = "";   // so picking the same file again still fires
-    if (!file) return;
-    try { restoring = parseBackup(await file.text()); }
-    catch (err) { showToast("Hindi Time Log backup ang file na 'yan. Walang nabago.", []); return; }
-    if (!restoring.logs) { restoring = null; showToast("Walang logs sa backup na 'yan.", []); return; }
+  // The whole file at once, as before: a confirm pop up, then everything in it is added.
+  function confirmRestoreAll(parsed) {
+    restoring = parsed;
     const when = new Date(restoring.taken).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
     const n = restoring.logs, d = Object.keys(restoring.days).length;
     $("restore-text").textContent = "Backup ng " + when + ": " + n + (n === 1 ? " log" : " logs") + " sa " + d + (d === 1 ? " day." : " days.") + " Idadagdag ito sa logs mo ngayon, at walang mabubura. Babalik din ang logs na binura mo pagkatapos ng backup na 'to.";
     $("restore-err").hidden = true;
     $("restore-wrap").classList.add("show");
+  }
+  $("restore-btn").addEventListener("click", () => openRestoreSheet());
+  $("restore-file").addEventListener("change", async e => {
+    const file = e.target.files[0];
+    e.target.value = "";   // so picking the same file again still fires
+    if (!file) return;
+    let parsed;
+    try { parsed = parseBackup(await file.text()); }
+    catch (err) { showToast("Hindi Time Log backup ang file na 'yan. Walang nabago.", []); return; }
+    if (!parsed.logs) { showToast("Walang logs sa backup na 'yan.", []); return; }
+    rs.file = parsed;
+    drawRestoreFile();
+  });
+
+  // ---------- restore sheet: pick a version of a day from history or from a backup file ----------
+  const rs = { src: "hist", day: "", file: null, pick: null };
+  const rsSpan = (text, cls) => { const e = document.createElement("span"); e.textContent = text; if (cls) e.className = cls; return e; };
+  const logCount = n => n + (n === 1 ? " log" : " logs");
+  const whenLabel = (t, day) => { const k = keyOf(t); return fmtTime(t) + (k === day ? "" : " · " + dayLabel(k).split(", ")[1]); };
+  function rsRow(title, subParts, value, onTap) {
+    const r = document.createElement("div"); r.className = "row" + (onTap ? " tap" : "");
+    const dot = document.createElement("span"); dot.className = "dot"; dot.style.background = "var(--line)";
+    const n = document.createElement("div");
+    const nn = document.createElement("div"); nn.className = "n"; nn.textContent = title;
+    const ss = document.createElement("div"); ss.className = "s";
+    subParts.forEach((p, i) => { if (i) ss.append(" · "); ss.append(typeof p === "string" ? rsSpan(p) : p); });
+    n.append(nn, ss);
+    const v = document.createElement("div"); v.className = "v"; v.textContent = value;
+    r.append(dot, n, v);
+    if (onTap) { r.tabIndex = 0; r.addEventListener("click", onTap); r.addEventListener("keydown", e => { if (e.key === "Enter") onTap(); }); }
+    return r;
+  }
+  function rsView(which) {
+    $("rs-hist").hidden = which !== "hist";
+    $("rs-file").hidden = which !== "file";
+    $("rs-preview").hidden = which !== "preview";
+    $("rs-src").hidden = which === "preview";
+    $("rs-back").hidden = $("rs-add").hidden = $("rs-replace").hidden = which !== "preview";
+    $("rs-close").hidden = which === "preview";
+    $("rs-err").hidden = true;
+  }
+  function openRestoreSheet() {
+    const today = keyOf(Date.now());
+    rs.day = viewDay && viewDay < today ? viewDay : today;
+    rs.src = mode === "db" ? "hist" : "file";
+    rs.pick = null;
+    showRestoreSrc();
+    $("rs-wrap").classList.add("show");
+  }
+  function showRestoreSrc() {
+    document.querySelectorAll("#rs-src [data-src]").forEach(b => b.classList.toggle("on", b.dataset.src === rs.src));
+    rsView(rs.src);
+    if (rs.src === "hist") drawRestoreHist(); else drawRestoreFile();
+  }
+  const closeRestoreSheet = () => { $("rs-wrap").classList.remove("show"); rs.pick = null; };
+  document.querySelectorAll("#rs-src [data-src]").forEach(b => b.addEventListener("click", () => { rs.src = b.dataset.src; showRestoreSrc(); }));
+  $("rs-close").addEventListener("click", closeRestoreSheet);
+  $("rs-wrap").addEventListener("click", e => { if (e.target.id === "rs-wrap") closeRestoreSheet(); });
+  $("rs-back").addEventListener("click", () => { rs.pick = null; showRestoreSrc(); });
+  $("rs-pick").addEventListener("click", () => $("restore-file").click());
+  $("rs-file-all").addEventListener("click", () => { if (rs.file) { closeRestoreSheet(); confirmRestoreAll(rs.file); } });
+  $("rs-prev").addEventListener("click", () => { rs.day = shiftDay(rs.day, -1); drawRestoreHist(); });
+  $("rs-next").addEventListener("click", () => { if (rs.day < keyOf(Date.now())) { rs.day = shiftDay(rs.day, 1); drawRestoreHist(); } });
+
+  function drawRestoreHist() {
+    const key = rs.day, list = $("rs-hist-list"), today = keyOf(Date.now());
+    $("rs-day").textContent = dayName(key);
+    $("rs-next").disabled = key >= today;
+    list.textContent = "";
+    if (mode !== "db") {
+      $("rs-hist-note").textContent = "Para sa naka-login lang ang history. Pwede pa rin ang File.";
+      return;
+    }
+    $("rs-hist-note").textContent = "Bawat device, may kopya ng araw tuwing may binago ka, isa kada 10 minuto. Pumili ng version para makita ang laman nito.";
+    const ready = dayReady(key);
+    list.append(rsRow("Ngayon", ["Ito ang nasa app ngayon"], ready ? logCount((days[key] || []).length) : "…", null));
+    const loading = rsRow("Sandali…", [], "", null); list.append(loading);
+    db.collection(root + "/days/" + key + "/history").orderBy("at", "desc").limit(60).get().then(snap => {
+      if (rs.day !== key || rs.pick) return;
+      loading.remove();
+      if (!ready && dayReady(key)) list.firstChild.querySelector(".v").textContent = logCount((days[key] || []).length);
+      if (snap.empty) { list.append(rsRow("Wala pang history sa araw na 'to", ["Nagsisimula ito sa v0.7.0"], "", null)); return; }
+      snap.forEach(d => {
+        const h = d.data();
+        if (!h || !Array.isArray(h.sessions)) return;
+        const v = { sessions: h.sessions, kasabay: Array.isArray(h.kasabay) ? h.kasabay : [] };
+        const parts = [rsSpan(showDevice(h.deviceName)), h.app || "lumang version"];
+        list.append(rsRow(whenLabel(h.at, key), parts, logCount(v.sessions.length), () => openRestorePreview(key, v, { at: h.at, device: h.deviceName, app: h.app })));
+      });
+    }).catch(() => {
+      if (rs.day !== key) return;
+      loading.remove();
+      $("rs-err").textContent = "Di ma-load ang history. Kailangan ng internet.";
+      $("rs-err").hidden = false;
+    });
+  }
+
+  function drawRestoreFile() {
+    const f = rs.file, list = $("rs-file-list");
+    list.textContent = "";
+    $("rs-file-all-row").hidden = !f;
+    if (!f) return;
+    const info = $("rs-file-info"); info.textContent = "";
+    info.append(rsSpan("Backup ng " + dayLabel(keyOf(f.taken)).split(", ")[1] + ", " + fmtTime(f.taken)));
+    if (f.device) { info.append(" · "); info.append(rsSpan(showDevice(f.device))); }
+    if (f.app) info.append(" · " + f.app);
+    Object.keys(f.days).sort().reverse().forEach(key => {
+      const d = f.days[key];
+      const parts = [logCount(d.sessions.length)];
+      if (d.kasabay.length) parts.push(d.kasabay.length + " Kasabay");
+      list.append(rsRow(dayLabel(key), parts, "›", () => openRestorePreview(key, d, { at: f.taken, device: f.device, app: f.app, file: true })));
+    });
+    if (rs.src === "file" && !rs.pick) rsView("file");
+  }
+
+  // Same tile, label and times as a log that's there now: nothing to bring back.
+  const sameLog = (a, b) => a.id === b.id || (a.cat === b.cat && (a.sub || "") === (b.sub || "") && a.start === b.start && a.end === b.end);
+  function openRestorePreview(key, v, meta) {
+    rs.pick = { key, v, meta };
+    rsView("preview");
+    dayReady(key);
+    const now = days[key] || [];
+    $("rs-pv-title").textContent = dayLabel(key);
+    const sub = $("rs-pv-sub"); sub.textContent = "";
+    sub.append(rsSpan((meta.file ? "Backup file" : "Version") + " ng " + whenLabel(meta.at, key)));
+    if (meta.device) { sub.append(" · "); sub.append(rsSpan(showDevice(meta.device))); }
+    if (meta.app) sub.append(" · " + meta.app);
+    const missing = v.sessions.filter(x => !now.some(y => sameLog(x, y))).length;
+    sub.append(" · "); sub.append(rsSpan(missing ? missing + " ang wala ngayon" : "Kumpleto ang lahat ngayon"));
+    const list = $("rs-pv-list"); list.textContent = "";
+    if (!v.sessions.length) list.append(rsRow("Walang logs sa version na 'to", [], "", null));
+    v.sessions.slice().sort((a, b) => a.start - b.start).forEach(x => {
+      const c = CAT[x.cat] || (meta.file && rs.file.cats.find(t => t.id === x.cat)) || { name: x.cat, c: "#999" };
+      const row = rsRow(c.name + (x.sub ? " · " + x.sub : ""), [fmtTime(x.start) + " – " + fmtTime(x.end)], fmtDur(x.end - x.start), null);
+      row.querySelector(".dot").style.background = c.c;
+      if (!now.some(y => sameLog(x, y))) { row.querySelector(".s").append(" · "); row.querySelector(".s").append(rsSpan("wala ngayon", "rs-new")); }
+      list.append(row);
+    });
+    $("rs-add").disabled = !missing;
+  }
+
+  // Get the day fresh from the server first, so what we add or replace is measured against the real thing.
+  async function freshDay(key) {
+    if (mode !== "db") return;
+    needFreshData("Walang nabago.");
+    const s = await db.doc(root + "/days/" + key).get({ source: "server" });
+    if (s.exists) setDayFromServer(key, s.data()); else { days[key] = []; kasDays[key] = []; delete base[key]; }
+    dayState[key] = "done";
+  }
+  async function applyRestore(replace) {
+    if (!rs.pick) return;
+    const { key, v } = rs.pick, btns = [$("rs-add"), $("rs-replace"), $("rs-back")];
+    btns.forEach(b => { b.disabled = true; });
+    try {
+      await freshDay(key);
+      const before = plainCopy({ sessions: days[key] || [], kas: kasDays[key] || [] });
+      const shape = () => JSON.stringify([days[key] || [], kasDays[key] || []].map(l => mergeAdjacent(l).map(x => [x.cat, x.sub || "", x.start, x.end])));
+      const was = shape();
+      const fresh = l => plainCopy(l).map(x => Object.assign(x, { id: typeof x.id === "string" ? x.id : uid() }));
+      if (replace) { days[key] = fresh(v.sessions); kasDays[key] = fresh(v.kasabay || []); }
+      else {
+        days[key] = (days[key] || []).concat(fresh(v.sessions).filter(x => !(days[key] || []).some(y => sameLog(x, y))));
+        kasDays[key] = (kasDays[key] || []).concat(fresh(v.kasabay || []).filter(x => !(kasDays[key] || []).some(y => sameLog(x, y))));
+      }
+      // Tiles the file has and this account doesn't, so the logs keep their name and color.
+      const missingCats = rs.pick.meta.file ? rs.file.cats.filter(c => !CAT[c.id] && days[key].concat(kasDays[key] || []).some(x => x.cat === c.id)) : [];
+      if (missingCats.length) { setCats(CATS.concat(missingCats)); saveCats(); }
+      normalizeDay(key);
+      if (shape() === was) { closeRestoreSheet(); showToast("Kumpleto na pala, walang kailangang ibalik.", []); return; }
+      saveDay(key);
+      closeRestoreSheet(); render();
+      showUndo((replace ? "Goods, naibalik na ang " : "Goods, nadagdag na sa ") + dayLabel(key) + ".", () => { days[key] = before.sessions; kasDays[key] = before.kas; saveDay(key); render(); });
+    } catch (err) {
+      $("rs-err").textContent = err && err.plain ? err.plain : "Di na-restore. Kailangan ng internet. Walang nabago.";
+      $("rs-err").hidden = false;
+    } finally { btns.forEach(b => { b.disabled = false; }); }
+  }
+  $("rs-add").addEventListener("click", () => applyRestore(false));
+  $("rs-replace").addEventListener("click", () => {
+    if (confirm("Papalitan nito ang logs ng araw na 'to ng laman ng version na 'to. May Undo pagkatapos.")) applyRestore(true);
   });
   $("restore-no").addEventListener("click", () => { if (!$("restore-yes").disabled) closeRestore(); });
   $("restore-wrap").addEventListener("click", e => { if (e.target.id === "restore-wrap" && !$("restore-yes").disabled) closeRestore(); });
@@ -3621,7 +3918,7 @@ nav.tabs .badge { position: absolute; top: 1px; left: calc(50% + 6px); min-width
         batch.commit().catch(onWriteError);   // same as saveDay: applies on the device now, don't wait on the server
       }
     }
-    [days, kasDays, dayState].forEach(o => Object.keys(o).forEach(k => { delete o[k]; }));
+    [days, kasDays, dayState, base].forEach(o => Object.keys(o).forEach(k => { delete o[k]; }));
     current = null; lastSwitch = null; viewDay = null; gapDay = null; skipped.clear(); saveSkipped();
     firstDay = ""; weekOff = 0;
     saveCurrent();
